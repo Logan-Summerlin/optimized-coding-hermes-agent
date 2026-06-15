@@ -12,7 +12,6 @@ def _make_agent(**overrides):
         skip_context_files=False,
         valid_tool_names=[],
         _task_completion_guidance=False,
-        _tool_use_enforcement=False,
         _environment_probe=False,
         _kanban_worker_guidance="",
         _memory_store=None,
@@ -37,7 +36,6 @@ def _captured_context_cwd(agent):
 
     with (
         patch("run_agent.load_soul_md", return_value=""),
-        patch("run_agent.build_nous_subscription_prompt", return_value=""),
         patch("run_agent.build_environment_hints", return_value=""),
         patch("run_agent.build_context_files_prompt", side_effect=fake_context_files),
     ):
@@ -60,7 +58,6 @@ class TestContextFileCwd:
 def _stable_prompt(agent):
     with (
         patch("run_agent.load_soul_md", return_value=""),
-        patch("run_agent.build_nous_subscription_prompt", return_value=""),
         patch("run_agent.build_environment_hints", return_value=""),
         patch("run_agent.build_context_files_prompt", return_value=""),
     ):

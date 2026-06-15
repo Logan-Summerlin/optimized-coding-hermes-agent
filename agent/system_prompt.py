@@ -10,9 +10,9 @@ fork inherits the cached prompt verbatim.
 Three tiers are joined with ``\\n\\n``:
 
 * ``stable``   — identity (SOUL.md or DEFAULT_AGENT_IDENTITY), tool
-  guidance, computer-use guidance, nous subscription block, tool-use
-  enforcement guidance + per-model operational guidance, skills prompt,
-  alibaba model-name workaround, environment hints, platform hints.
+  guidance, the universal operating brief (TASK_COMPLETION_GUIDANCE),
+  skills prompt, coding posture brief + workspace snapshot, environment
+  hints, platform hints.
 * ``context``  — caller-supplied ``system_message`` plus context files
   (AGENTS.md / .cursorrules / etc.) discovered under ``TERMINAL_CWD``.
 * ``volatile`` — memory snapshot, USER.md profile, external memory
@@ -28,16 +28,12 @@ from typing import Any, Dict, List, Optional
 
 from agent.prompt_builder import (
     DEFAULT_AGENT_IDENTITY,
-    HERMES_AGENT_HELP_GUIDANCE,
     MEMORY_GUIDANCE,
-    OPENAI_MODEL_EXECUTION_GUIDANCE,
     PLATFORM_HINTS,
     SESSION_SEARCH_GUIDANCE,
     SKILLS_GUIDANCE,
     STEER_CHANNEL_NOTE,
     TASK_COMPLETION_GUIDANCE,
-    TOOL_USE_ENFORCEMENT_GUIDANCE,
-    TOOL_USE_ENFORCEMENT_MODELS,
 )
 from agent.runtime_cwd import resolve_context_cwd
 
@@ -97,15 +93,10 @@ def build_system_prompt_parts(agent: Any, system_message: Optional[str] = None) 
         # Fallback to hardcoded identity
         stable_parts.append(DEFAULT_AGENT_IDENTITY)
 
-    # Pointer to the hermes-agent skill + docs for user questions about Hermes itself.
-    stable_parts.append(HERMES_AGENT_HELP_GUIDANCE)
-
-    # Universal task-completion / no-fabrication guidance.  Applied to ALL
-    # models regardless of tool_use_enforcement gating — the failure modes
-    # this targets (stopping after a stub; fabricating output when a real
-    # path is blocked) are not model-family specific.  Gated only by
-    # config.yaml ``agent.task_completion_guidance`` (default True) so
-    # users who want a leaner prompt can turn it off.
+    # Universal operating brief: act through tools, finish the job, don't
+    # fabricate, verify.  Applied to every surface that has tools (gated only by
+    # config.yaml ``agent.task_completion_guidance``, default True).  Family-
+    # agnostic — it absorbed the old per-model tool-use-enforcement blocks.
     if getattr(agent, "_task_completion_guidance", True) and agent.valid_tool_names:
         stable_parts.append(TASK_COMPLETION_GUIDANCE)
 
@@ -124,41 +115,6 @@ def build_system_prompt_parts(agent: Any, system_message: Optional[str] = None) 
     # agent has tools. Static text → byte-stable prompt (no cache hit).
     if agent.valid_tool_names:
         stable_parts.append(STEER_CHANNEL_NOTE)
-
-    nous_subscription_prompt = _r.build_nous_subscription_prompt(agent.valid_tool_names)
-    if nous_subscription_prompt:
-        stable_parts.append(nous_subscription_prompt)
-    # Tool-use enforcement: tells the model to actually call tools instead
-    # of describing intended actions.  Controlled by config.yaml
-    # agent.tool_use_enforcement:
-    #   "auto" (default) — matches TOOL_USE_ENFORCEMENT_MODELS
-    #   true  — always inject (all models)
-    #   false — never inject
-    #   list  — custom model-name substrings to match
-    if agent.valid_tool_names:
-        _enforce = agent._tool_use_enforcement
-        _inject = False
-        if _enforce is True or (isinstance(_enforce, str) and _enforce.lower() in {"true", "always", "yes", "on"}):
-            _inject = True
-        elif _enforce is False or (isinstance(_enforce, str) and _enforce.lower() in {"false", "never", "no", "off"}):
-            _inject = False
-        elif isinstance(_enforce, list):
-            model_lower = (agent.model or "").lower()
-            _inject = any(p.lower() in model_lower for p in _enforce if isinstance(p, str))
-        else:
-            # "auto" or any unrecognised value — use hardcoded defaults
-            model_lower = (agent.model or "").lower()
-            _inject = any(p in model_lower for p in TOOL_USE_ENFORCEMENT_MODELS)
-        if _inject:
-            stable_parts.append(TOOL_USE_ENFORCEMENT_GUIDANCE)
-            _model_lower = (agent.model or "").lower()
-            # OpenAI GPT/Codex execution discipline (tool persistence,
-            # prerequisite checks, verification, anti-hallucination).
-            # Also applied to xAI Grok — same failure modes (claims completion
-            # without tool calls, suggests workarounds instead of using
-            # existing tools, replies with plans instead of executing).
-            if "gpt" in _model_lower or "codex" in _model_lower or "grok" in _model_lower:
-                stable_parts.append(OPENAI_MODEL_EXECUTION_GUIDANCE)
 
     has_skills_tools = any(name in agent.valid_tool_names for name in ['skills_list', 'skill_view', 'skill_manage'])
     if has_skills_tools:
@@ -249,40 +205,6 @@ def build_system_prompt_parts(agent: Any, system_message: Optional[str] = None) 
         except Exception:
             # Probe failure must never block prompt build.
             pass
-
-    # Active-profile hint — names the Hermes profile the agent is running
-    # under so it doesn't conflate ~/.hermes/skills/ (default profile) with
-    # ~/.hermes/profiles/<active>/skills/ (this profile's). Deterministic
-    # for the lifetime of the agent — profile name doesn't change
-    # mid-session, so this doesn't break the prompt cache.
-    # See file_safety._resolve_active_profile_name + classify_cross_profile_target
-    # for the matching tool-side guard.
-    try:
-        from agent.file_safety import _resolve_active_profile_name
-        active_profile = _resolve_active_profile_name()
-    except Exception:
-        active_profile = "default"
-    if active_profile == "default":
-        stable_parts.append(
-            "Active Hermes profile: default. Other profiles (if any) live "
-            "under ~/.hermes/profiles/<name>/. Each profile has its own "
-            "skills/, plugins/, cron/, and memories/ that affect a different "
-            "session than this one. Do not modify another profile's "
-            "skills/plugins/cron/memories unless the user explicitly directs "
-            "you to."
-        )
-    else:
-        stable_parts.append(
-            f"Active Hermes profile: {active_profile}. This session reads "
-            f"and writes ~/.hermes/profiles/{active_profile}/. The default "
-            f"profile's data lives at ~/.hermes/skills/, ~/.hermes/plugins/, "
-            f"~/.hermes/cron/, ~/.hermes/memories/ — those belong to a "
-            f"different session run from a different shell. Do NOT modify "
-            f"another profile's skills/plugins/cron/memories unless the user "
-            f"explicitly directs you to. The cross-profile write guard will "
-            f"refuse such writes by default; pass cross_profile=True only "
-            f"after explicit direction."
-        )
 
     platform_key = (agent.platform or "").lower().strip()
     if platform_key in PLATFORM_HINTS:
