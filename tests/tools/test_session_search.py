@@ -90,8 +90,8 @@ class TestSchema:
         assert "SCROLL" in desc
         assert "DISCOVERY" in desc
         assert "BROWSE" in desc
-        # Must explain how to scroll
-        assert "scroll FORWARD" in desc or "messages[-1]" in desc
+        # Must explain how to scroll (page by re-anchoring on a returned id)
+        assert "around_message_id" in desc and "paging" in desc
 
     def test_no_llm_promise_in_description(self):
         # The new design never calls an LLM
