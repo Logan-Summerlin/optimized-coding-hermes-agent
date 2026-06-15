@@ -191,8 +191,7 @@ Each rung adds more permanent surface than the one above. Choose the highest
    zero permanent core-schema footprint, and it's reusable by any MCP host.
 6. **New core tool** — only when the capability is fundamental, broadly useful
    to nearly every user, and unreachable via terminal + file (or an MCP server).
-   Examples of correct core tools: terminal, read_file, web_search,
-   browser_navigate.
+   Examples of correct core tools: terminal, read_file, web_search.
 
 When 3+ open PRs try to integrate the same *category* of thing (memory
 backends, providers, notifiers), don't merge them one at a time — design an
@@ -581,7 +580,7 @@ Reference: #2810 (bounds pass), #9801 (SHA pinning + audit CI).
 ### Top-level `config.yaml` sections (non-exhaustive):
 
 `model`, `agent`, `terminal`, `compression`, `display`, `stt`, `tts`,
-`memory`, `security`, `delegation`, `smart_model_routing`, `checkpoints`,
+`memory`, `security`, `smart_model_routing`, `checkpoints`,
 `auxiliary`, `curator`, `skills`, `gateway`, `logging`, `cron`, `profiles`,
 `plugins`, `honcho`.
 
@@ -874,8 +873,7 @@ violate them.
    MCP servers the skill explicitly expects.** When the skill needs a
    capability, point at the proper tool by name in backticks
    (`` `terminal` ``, `` `web_extract` ``, `` `read_file` ``,
-   `` `patch` ``, `` `search_files` ``, `` `vision_analyze` ``,
-   `` `browser_navigate` ``, `` `delegate_task` ``, etc.). Do NOT
+   `` `patch` ``, `` `search_files` ``, etc.). Do NOT
    name shell utilities the agent already has wrapped — `grep` →
    `search_files`, `cat`/`head`/`tail` → `read_file`, `sed`/`awk` →
    `patch`, `find`/`ls` → `search_files target='files'`. If the skill
@@ -935,52 +933,16 @@ contributor skill PRs.
 ## Toolsets
 
 All toolsets are defined in `toolsets.py` as a single `TOOLSETS` dict.
-Each platform's adapter picks a base toolset (e.g. Telegram uses
-`"messaging"`); `_HERMES_CORE_TOOLS` is the default bundle most
-platforms inherit from.
+Each platform's adapter picks a base toolset; `_HERMES_CORE_TOOLS` is the
+default bundle the CLI and Telegram gateway share.
 
-Current toolset keys: `browser`, `clarify`, `code_execution`, `cronjob`,
-`debugging`, `delegation`, `discord`, `discord_admin`, `feishu_doc`,
-`feishu_drive`, `file`, `homeassistant`, `image_gen`, `kanban`, `memory`,
-`messaging`, `moa`, `rl`, `safe`, `search`, `session_search`, `skills`,
-`spotify`, `terminal`, `todo`, `tts`, `video`, `vision`, `web`, `yuanbao`.
+Current toolset keys: `clarify`, `coding`, `context_engine`, `debugging`,
+`file`, `hermes-cli`, `hermes-gateway`, `hermes-telegram`, `memory`,
+`safe`, `search`, `session_search`, `skills`, `terminal`, `todo`, `web`.
 
 Enable/disable per platform via `hermes tools` (the curses UI) or the
 `tools.<platform>.enabled` / `tools.<platform>.disabled` lists in
 `config.yaml`.
-
----
-
-## Delegation (`delegate_task`)
-
-`tools/delegate_tool.py` spawns a subagent with an isolated
-context + terminal session. Synchronous: the parent waits for the
-child's summary before continuing its own loop — if the parent is
-interrupted, the child is cancelled.
-
-Two shapes:
-
-- **Single:** pass `goal` (+ optional `context`, `toolsets`).
-- **Batch (parallel):** pass `tasks: [...]` — each gets its own subagent
-  running concurrently. Concurrency is capped by
-  `delegation.max_concurrent_children` (default 3).
-
-Roles:
-
-- `role="leaf"` (default) — focused worker. Cannot call `delegate_task`,
-  `clarify`, `memory`, `send_message`, `execute_code`.
-- `role="orchestrator"` — retains `delegate_task` so it can spawn its
-  own workers. Gated by `delegation.orchestrator_enabled` (default true)
-  and bounded by `delegation.max_spawn_depth` (default 2).
-
-Key config knobs (under `delegation:` in `config.yaml`):
-`max_concurrent_children`, `max_spawn_depth`, `child_timeout_seconds`,
-`orchestrator_enabled`, `subagent_auto_approve`, `inherit_mcp_toolsets`,
-`max_iterations`.
-
-Synchronicity rule: delegate_task is **not** durable. For long-running
-work that must outlive the current turn, use `cronjob` or
-`terminal(background=True, notify_on_complete=True)` instead.
 
 ---
 
@@ -1020,10 +982,9 @@ Full user-facing docs: `website/docs/user-guide/features/curator.md`.
 
 ## Cron (scheduled jobs)
 
-`cron/jobs.py` (job store) + `cron/scheduler.py` (tick loop). Agents
-schedule jobs via the `cronjob` tool; users via `hermes cron <verb>`
-(`list`, `add`, `edit`, `pause`, `resume`, `run`, `remove`) or the
-`/cron` slash command.
+`cron/jobs.py` (job store) + `cron/scheduler.py` (tick loop). Users
+schedule jobs via `hermes cron <verb>` (`list`, `add`, `edit`, `pause`,
+`resume`, `run`, `remove`) or the `/cron` slash command.
 
 Supported schedule formats:
 - Duration: `"30m"`, `"2h"`, `"1d"`
@@ -1199,10 +1160,10 @@ interactive menus must use `hermes_cli/curses_ui.py` — see
 Leaks as literal `?[K` text under `prompt_toolkit`'s `patch_stdout`. Use space-padding: `f"\r{line}{' ' * pad}"`.
 
 ### `_last_resolved_tool_names` is a process-global in `model_tools.py`
-`_run_single_child()` in `delegate_tool.py` saves and restores this global around subagent execution. If you add new code that reads this global, be aware it may be temporarily stale during child agent runs.
+It tracks the most recently resolved tool set. If you add new code that reads this global, be aware it reflects the last `get_tool_definitions()` call, not necessarily the current agent's tools.
 
 ### DO NOT hardcode cross-tool references in schema descriptions
-Tool schema descriptions must not mention tools from other toolsets by name (e.g., `browser_navigate` saying "prefer web_search"). Those tools may be unavailable (missing API keys, disabled toolset), causing the model to hallucinate calls to non-existent tools. If a cross-reference is needed, add it dynamically in `get_tool_definitions()` in `model_tools.py` — see the `browser_navigate` / `execute_code` post-processing blocks for the pattern.
+Tool schema descriptions must not mention tools from other toolsets by name (e.g. a tool's description saying "prefer web_search"). Those tools may be unavailable (missing API keys, disabled toolset), causing the model to hallucinate calls to non-existent tools. If a cross-reference is genuinely needed, add it dynamically in `get_tool_definitions()` in `model_tools.py` rather than baking it into the static schema.
 
 ### The gateway has TWO message guards — both must bypass approval/control commands
 When an agent is running, messages pass through two sequential guards:

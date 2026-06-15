@@ -1196,17 +1196,12 @@ def init_agent(
     except Exception:
         pass
 
-    # Tool-use enforcement config: "auto" (default — matches hardcoded
-    # model list), true (always), false (never), or list of substrings.
     _agent_section = _agent_cfg.get("agent", {})
     if not isinstance(_agent_section, dict):
         _agent_section = {}
-    agent._tool_use_enforcement = _agent_section.get("tool_use_enforcement", "auto")
 
-    # Universal task-completion guidance toggle.  Default True.  Surfaced
-    # as a separate flag from tool_use_enforcement because the guidance
-    # applies to ALL models, not just the model families enforcement
-    # targets.
+    # Universal operating-brief toggle (act via tools, finish the job, don't
+    # fabricate, verify).  Default True; set False for a leaner prompt.
     agent._task_completion_guidance = bool(_agent_section.get("task_completion_guidance", True))
 
     # Local Python toolchain probe toggle.  Default True.  When False,

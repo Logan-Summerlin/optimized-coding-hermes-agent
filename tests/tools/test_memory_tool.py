@@ -19,10 +19,9 @@ from tools.memory_tool import (
 class TestMemorySchema:
     def test_discourages_diary_style_task_logs(self):
         description = MEMORY_SCHEMA["description"]
-        assert "Do NOT save task progress" in description
+        assert "Don't store task progress" in description
         assert "session_search" in description
         assert "like a diary" not in description
-        assert "temporary task state" in description
         assert ">80%" not in description
 
 

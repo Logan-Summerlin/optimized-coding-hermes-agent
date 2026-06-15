@@ -16,19 +16,15 @@ from agent.prompt_builder import (
     _find_git_root,
     _strip_yaml_frontmatter,
     build_skills_system_prompt,
-    build_nous_subscription_prompt,
     build_context_files_prompt,
     CONTEXT_FILE_MAX_CHARS,
     DEFAULT_AGENT_IDENTITY,
-    TOOL_USE_ENFORCEMENT_GUIDANCE,
-    TOOL_USE_ENFORCEMENT_MODELS,
-    OPENAI_MODEL_EXECUTION_GUIDANCE,
+    TASK_COMPLETION_GUIDANCE,
     MEMORY_GUIDANCE,
     SESSION_SEARCH_GUIDANCE,
     PLATFORM_HINTS,
     WSL_ENVIRONMENT_HINT,
 )
-from hermes_cli.nous_subscription import NousFeatureState, NousSubscriptionFeatures
 
 
 # =========================================================================
@@ -38,8 +34,8 @@ from hermes_cli.nous_subscription import NousFeatureState, NousSubscriptionFeatu
 
 class TestGuidanceConstants:
     def test_memory_guidance_discourages_task_logs(self):
-        assert "durable facts" in MEMORY_GUIDANCE
-        assert "Do NOT save task progress" in MEMORY_GUIDANCE
+        assert "durable" in MEMORY_GUIDANCE
+        assert "Do NOT store task progress" in MEMORY_GUIDANCE
         assert "session_search" in MEMORY_GUIDANCE
         assert "like a diary" not in MEMORY_GUIDANCE
         assert ">80%" not in MEMORY_GUIDANCE
@@ -476,66 +472,6 @@ class TestBuildSkillsSystemPrompt:
         assert "backend-skill" in result
 
 
-class TestBuildNousSubscriptionPrompt:
-    def test_includes_active_subscription_features(self, monkeypatch):
-        monkeypatch.setattr("tools.tool_backend_helpers.managed_nous_tools_enabled", lambda: True)
-        monkeypatch.setattr(
-            "hermes_cli.nous_subscription.get_nous_subscription_features",
-            lambda config=None: NousSubscriptionFeatures(
-                subscribed=True,
-                nous_auth_present=True,
-                provider_is_nous=True,
-                features={
-                    "web": NousFeatureState("web", "Web tools", True, True, True, True, False, True, "firecrawl"),
-                    "image_gen": NousFeatureState("image_gen", "Image generation", True, True, True, True, False, True, "Nous Subscription"),
-                    "video_gen": NousFeatureState("video_gen", "Video generation", False, False, False, False, False, False, ""),
-                    "tts": NousFeatureState("tts", "OpenAI TTS", True, True, True, True, False, True, "OpenAI TTS"),
-                    "stt": NousFeatureState("stt", "Speech-to-text", True, True, True, True, False, True, "OpenAI Whisper"),
-                    "browser": NousFeatureState("browser", "Browser automation", True, True, True, True, False, True, "Browser Use"),
-                    "modal": NousFeatureState("modal", "Modal execution", False, True, False, False, False, True, "local"),
-                },
-            ),
-        )
-
-        prompt = build_nous_subscription_prompt({"web_search", "browser_navigate"})
-
-        assert "Browser Use" in prompt
-        assert "Modal execution is optional" in prompt
-        assert "do not ask the user for Firecrawl, FAL, OpenAI TTS, OpenAI Whisper, or Browser-Use API keys" in prompt
-
-    def test_non_subscriber_prompt_includes_relevant_upgrade_guidance(self, monkeypatch):
-        monkeypatch.setattr("tools.tool_backend_helpers.managed_nous_tools_enabled", lambda: True)
-        monkeypatch.setattr(
-            "hermes_cli.nous_subscription.get_nous_subscription_features",
-            lambda config=None: NousSubscriptionFeatures(
-                subscribed=False,
-                nous_auth_present=False,
-                provider_is_nous=False,
-                features={
-                    "web": NousFeatureState("web", "Web tools", True, False, False, False, False, True, ""),
-                    "image_gen": NousFeatureState("image_gen", "Image generation", True, False, False, False, False, True, ""),
-                    "video_gen": NousFeatureState("video_gen", "Video generation", False, False, False, False, False, False, ""),
-                    "tts": NousFeatureState("tts", "OpenAI TTS", True, False, False, False, False, True, ""),
-                    "stt": NousFeatureState("stt", "Speech-to-text", True, False, False, False, False, True, ""),
-                    "browser": NousFeatureState("browser", "Browser automation", True, False, False, False, False, True, ""),
-                    "modal": NousFeatureState("modal", "Modal execution", False, False, False, False, False, True, ""),
-                },
-            ),
-        )
-
-        prompt = build_nous_subscription_prompt({"image_generate"})
-
-        assert "suggest Nous subscription as one option" in prompt
-        assert "Do not mention subscription unless" in prompt
-
-    def test_feature_flag_off_returns_empty_prompt(self, monkeypatch):
-        monkeypatch.setattr("tools.tool_backend_helpers.managed_nous_tools_enabled", lambda: False)
-
-        prompt = build_nous_subscription_prompt({"web_search"})
-
-        assert prompt == ""
-
-
 # =========================================================================
 # Context files prompt builder
 # =========================================================================
@@ -834,30 +770,9 @@ class TestPromptBuilderConstants:
         assert len(DEFAULT_AGENT_IDENTITY) > 50
 
     def test_platform_hints_known_platforms(self):
-        assert "whatsapp" in PLATFORM_HINTS
-        assert "whatsapp_cloud" in PLATFORM_HINTS
+        # Lean agent ships only the Telegram gateway + CLI surfaces.
         assert "telegram" in PLATFORM_HINTS
-        assert "discord" in PLATFORM_HINTS
-        assert "cron" in PLATFORM_HINTS
         assert "cli" in PLATFORM_HINTS
-        assert "api_server" in PLATFORM_HINTS
-        assert "webui" in PLATFORM_HINTS
-
-    def test_whatsapp_cloud_hint_mentions_24h_window(self):
-        """The Cloud API's 24-hour conversation window is a hard rule the
-        agent should know about. Phase 5 (template fallback) was deferred,
-        so the model needs to know free-form replies outside the window
-        will fail with Graph error 131047 — otherwise it'll cheerfully
-        try to schedule delayed messages that silently break."""
-        hint = PLATFORM_HINTS["whatsapp_cloud"]
-        assert "24-hour" in hint or "24h" in hint or "24 hour" in hint
-        assert "131047" in hint
-
-    def test_whatsapp_cloud_hint_advertises_media(self):
-        """Cloud adapter supports the same MEDIA:/path/ convention as
-        Baileys for outbound attachments."""
-        hint = PLATFORM_HINTS["whatsapp_cloud"]
-        assert "MEDIA:" in hint
 
     def test_cli_hint_does_not_suggest_media_tags(self):
         # Regression: MEDIA:/path tags are intercepted only by messaging
@@ -875,49 +790,16 @@ class TestPromptBuilderConstants:
         ), "CLI hint should explicitly discourage MEDIA: tags."
         # Messaging hints should still advertise MEDIA: positively (sanity
         # check that this test is calibrated correctly).
-        assert "include MEDIA:" in PLATFORM_HINTS["telegram"]
+        assert "MEDIA:" in PLATFORM_HINTS["telegram"]
 
-    def test_telegram_hint_encourages_rich_markdown(self):
-        # Telegram Bot API 10.1 rich messages are default-on, so the hint must
-        # encourage native structured markdown instead of forbidding tables.
+    def test_telegram_hint_encourages_structured_markdown(self):
+        # The trimmed Telegram hint must still steer toward native structured
+        # formatting (tables + lists) and keep local media-delivery guidance.
         hint = PLATFORM_HINTS["telegram"]
         lowered = hint.lower()
-        assert "Telegram has NO table syntax" not in hint
-        assert "rich markdown" in lowered
         assert "table" in lowered
-        assert "task list" in lowered
-        assert "math" in lowered
-        # Hint should proactively steer toward structured formatting, not just
-        # permit it: bullet + numbered lists for scannable, structured output.
-        assert "bullet" in lowered
-        assert "numbered" in lowered
-        # Local media delivery guidance must remain intact.
-        assert "include MEDIA:" in hint
-
-    def test_platform_hints_mattermost(self):
-        hint = PLATFORM_HINTS["mattermost"]
-        assert "Mattermost" in hint
+        assert "list" in lowered
         assert "MEDIA:" in hint
-        assert "Markdown" in hint
-
-    def test_platform_hints_matrix(self):
-        hint = PLATFORM_HINTS["matrix"]
-        assert "Matrix" in hint
-        assert "MEDIA:" in hint
-        assert "Markdown" in hint
-
-    def test_platform_hints_feishu(self):
-        hint = PLATFORM_HINTS["feishu"]
-        assert "Feishu" in hint
-        assert "MEDIA:" in hint
-        assert "Markdown" in hint
-
-    def test_platform_hints_webui(self):
-        hint = PLATFORM_HINTS["webui"]
-        assert "WebUI" in hint
-        assert "MEDIA:" in hint
-        assert "Markdown" in hint
-        assert "absolute" in hint
 
 
 # =========================================================================
@@ -1280,73 +1162,29 @@ class TestBuildSkillsSystemPromptConditional:
 
 
 # =========================================================================
-# Tool-use enforcement guidance
+# Universal operating brief (merged tool-use / finish-the-job guidance)
 # =========================================================================
 
 
-class TestToolUseEnforcementGuidance:
-    def test_guidance_mentions_tool_calls(self):
-        assert "tool call" in TOOL_USE_ENFORCEMENT_GUIDANCE.lower()
+class TestTaskCompletionGuidance:
+    def test_requires_acting_through_tools(self):
+        text = TASK_COMPLETION_GUIDANCE.lower()
+        assert "tool" in text
+        assert "describe" in text or "promise" in text
 
-    def test_guidance_forbids_description_only(self):
-        assert "describe" in TOOL_USE_ENFORCEMENT_GUIDANCE.lower()
-        assert "promise" in TOOL_USE_ENFORCEMENT_GUIDANCE.lower()
+    def test_covers_finishing_and_verifying(self):
+        text = TASK_COMPLETION_GUIDANCE.lower()
+        assert "verify" in text
+        assert "stub" in text or "plan" in text
 
-    def test_guidance_requires_action(self):
-        assert "MUST" in TOOL_USE_ENFORCEMENT_GUIDANCE
+    def test_forbids_fabrication(self):
+        text = TASK_COMPLETION_GUIDANCE.lower()
+        assert "fabricat" in text
+        assert "blocker" in text or "blocks" in text
 
-    def test_enforcement_models_includes_gpt(self):
-        assert "gpt" in TOOL_USE_ENFORCEMENT_MODELS
-
-    def test_enforcement_models_includes_codex(self):
-        assert "codex" in TOOL_USE_ENFORCEMENT_MODELS
-
-    def test_enforcement_models_includes_grok(self):
-        assert "grok" in TOOL_USE_ENFORCEMENT_MODELS
-
-    def test_enforcement_models_includes_qwen(self):
-        assert "qwen" in TOOL_USE_ENFORCEMENT_MODELS
-
-    def test_enforcement_models_includes_deepseek(self):
-        assert "deepseek" in TOOL_USE_ENFORCEMENT_MODELS
-
-    def test_enforcement_models_is_tuple(self):
-        assert isinstance(TOOL_USE_ENFORCEMENT_MODELS, tuple)
-
-
-class TestOpenAIModelExecutionGuidance:
-    """Tests for GPT/Codex-specific execution discipline guidance."""
-
-    def test_guidance_covers_tool_persistence(self):
-        text = OPENAI_MODEL_EXECUTION_GUIDANCE.lower()
-        assert "tool_persistence" in text
-        assert "retry" in text
-        assert "empty" in text or "partial" in text
-
-    def test_guidance_covers_prerequisite_checks(self):
-        text = OPENAI_MODEL_EXECUTION_GUIDANCE.lower()
-        assert "prerequisite" in text
-        assert "dependency" in text
-
-    def test_guidance_covers_verification(self):
-        text = OPENAI_MODEL_EXECUTION_GUIDANCE.lower()
-        assert "verification" in text or "verify" in text
-        assert "correctness" in text
-
-    def test_guidance_covers_missing_context(self):
-        text = OPENAI_MODEL_EXECUTION_GUIDANCE.lower()
-        assert "missing_context" in text or "missing context" in text
-        assert "hallucinate" in text or "guess" in text
-
-    def test_guidance_uses_xml_tags(self):
-        assert "<tool_persistence>" in OPENAI_MODEL_EXECUTION_GUIDANCE
-        assert "</tool_persistence>" in OPENAI_MODEL_EXECUTION_GUIDANCE
-        assert "<verification>" in OPENAI_MODEL_EXECUTION_GUIDANCE
-        assert "</verification>" in OPENAI_MODEL_EXECUTION_GUIDANCE
-
-    def test_guidance_is_string(self):
-        assert isinstance(OPENAI_MODEL_EXECUTION_GUIDANCE, str)
-        assert len(OPENAI_MODEL_EXECUTION_GUIDANCE) > 100
+    def test_is_string(self):
+        assert isinstance(TASK_COMPLETION_GUIDANCE, str)
+        assert len(TASK_COMPLETION_GUIDANCE) > 100
 
 
 # =========================================================================

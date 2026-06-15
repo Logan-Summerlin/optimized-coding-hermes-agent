@@ -841,17 +841,10 @@ DEFAULT_CONFIG = {
         # provider hiccups on a single provider.
         "api_max_retries": 3,
         "service_tier": "",
-        # Tool-use enforcement: injects system prompt guidance that tells the
-        # model to actually call tools instead of describing intended actions.
-        # Values: "auto" (default — applies to gpt/codex models), true/false
-        # (force on/off for all models), or a list of model-name substrings
-        # to match (e.g. ["gpt", "codex", "gemini", "qwen"]).
-        "tool_use_enforcement": "auto",
-        # Universal "finish the job" guidance — short prompt block applied to
-        # all models that targets two cross-family failure modes: (1) stopping
-        # after a stub instead of finishing the artifact, (2) fabricating
-        # plausible-looking output when a real path is blocked.  Costs ~80
-        # tokens in the cached system prompt.  Set False to disable globally.
+        # Universal operating brief — short cached system-prompt block applied
+        # to every model: act through tools instead of describing, finish the
+        # job (working result, not a stub/plan), don't fabricate output when
+        # blocked, and verify before claiming done.  Set False to disable.
         "task_completion_guidance": True,
         # Local-environment toolchain probe — surfaces Python/pip/uv/PEP-668
         # state in the system prompt when something non-default is detected
