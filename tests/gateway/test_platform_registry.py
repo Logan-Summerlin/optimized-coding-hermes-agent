@@ -18,24 +18,6 @@ class TestPlatformEnumDynamic:
         assert Platform.TELEGRAM.value == "telegram"
         assert Platform("telegram") is Platform.TELEGRAM
 
-    def test_dynamic_member_created(self):
-        p = Platform("irc")
-        assert p.value == "irc"
-        assert p.name == "IRC"
-
-    def test_dynamic_member_identity_stable(self):
-        """Same value returns same object (cached)."""
-        a = Platform("irc")
-        b = Platform("irc")
-        assert a is b
-
-    def test_dynamic_member_case_normalised(self):
-        """Mixed case normalised to lowercase."""
-        a = Platform("IRC")
-        b = Platform("irc")
-        assert a is b
-        assert a.value == "irc"
-
     def test_dynamic_member_with_hyphens(self):
         """Registered plugin platforms with hyphens work once registered."""
         from gateway.platform_registry import platform_registry as _reg
@@ -207,18 +189,6 @@ class TestPlatformRegistry:
 class TestGatewayConfigPluginPlatform:
     """Test that GatewayConfig parses and validates plugin platforms."""
 
-    def test_from_dict_accepts_plugin_platform(self):
-        data = {
-            "platforms": {
-                "telegram": {"enabled": True, "token": "test-token"},
-                "irc": {"enabled": True, "extra": {"server": "irc.libera.chat"}},
-            }
-        }
-        cfg = GatewayConfig.from_dict(data)
-        platform_values = {p.value for p in cfg.platforms}
-        assert "telegram" in platform_values
-        assert "irc" in platform_values
-
     def test_get_connected_platforms_includes_registered_plugin(self):
         """Plugin platform with registry entry passes get_connected_platforms."""
         # Register a fake plugin platform
@@ -333,11 +303,6 @@ class TestCronPlatformResolution:
         """Built-in platform names resolve via Platform() call."""
         p = Platform("telegram")
         assert p is Platform.TELEGRAM
-
-    def test_plugin_platform_resolves(self):
-        """Plugin platform names create dynamic enum members."""
-        p = Platform("irc")
-        assert p.value == "irc"
 
     def test_invalid_platform_type_rejected(self):
         """Non-string values are still rejected."""

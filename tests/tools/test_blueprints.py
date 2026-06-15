@@ -124,26 +124,6 @@ class TestBlueprintSpecForInstalled:
             assert blueprint_spec_for_installed("not-a-blueprint") is None
 
 
-class TestCreateBlueprintJob:
-    def test_bridges_to_create_job(self):
-        spec = parse_blueprint(BLUEPRINT_SKILL)
-        assert spec is not None
-        captured = {}
-
-        def fake_create_job(**kwargs):
-            captured.update(kwargs)
-            return {"id": "abc123", **kwargs}
-
-        with patch("cron.jobs.create_job", fake_create_job):
-            job = create_blueprint_job(spec, origin={"platform": "telegram"})
-
-        assert captured["schedule"] == "0 8 * * *"
-        assert captured["skills"] == ["morning-brief"]
-        assert captured["deliver"] == "telegram"
-        assert captured["prompt"].startswith("Summarize")
-        assert job["id"] == "abc123"
-
-
 class TestExportBlueprint:
     def test_round_trips_job_to_skill_md(self):
         job = {

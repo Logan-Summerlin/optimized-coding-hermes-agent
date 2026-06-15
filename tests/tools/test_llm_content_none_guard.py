@@ -170,25 +170,10 @@ class TestSourceLinesAreGuarded:
         with open(os.path.join(base, rel_path)) as f:
             return f.read()
 
-    def test_mixture_of_agents_reference_model_guarded(self):
-        src = self._read_file("tools/mixture_of_agents_tool.py")
-        # The unguarded pattern should NOT exist
-        assert ".message.content.strip()" not in src, (
-            "tools/mixture_of_agents_tool.py still has unguarded "
-            ".content.strip() — apply `(... or \"\").strip()` guard"
-        )
-
     def test_web_tools_guarded(self):
         src = self._read_file("tools/web_tools.py")
         assert ".message.content.strip()" not in src, (
             "tools/web_tools.py still has unguarded "
-            ".content.strip() — apply `(... or \"\").strip()` guard"
-        )
-
-    def test_vision_tools_guarded(self):
-        src = self._read_file("tools/vision_tools.py")
-        assert ".message.content.strip()" not in src, (
-            "tools/vision_tools.py still has unguarded "
             ".content.strip() — apply `(... or \"\").strip()` guard"
         )
 

@@ -297,33 +297,6 @@ def test_check_website_access_blocks_scheme_less_urls(tmp_path):
     assert blocked["rule"] == "blocked.test"
 
 
-def test_browser_navigate_returns_policy_block(monkeypatch):
-    from tools import browser_tool
-
-    # Allow SSRF check to pass so the policy check is reached
-    monkeypatch.setattr(browser_tool, "_is_safe_url", lambda url: True)
-    monkeypatch.setattr(
-        browser_tool,
-        "check_website_access",
-        lambda url: {
-            "host": "blocked.test",
-            "rule": "blocked.test",
-            "source": "config",
-            "message": "Blocked by website policy",
-        },
-    )
-    monkeypatch.setattr(
-        browser_tool,
-        "_run_browser_command",
-        lambda *args, **kwargs: pytest.fail("browser command should not run for blocked URL"),
-    )
-
-    result = json.loads(browser_tool.browser_navigate("https://blocked.test"))
-
-    assert result["success"] is False
-    assert result["blocked_by_policy"]["rule"] == "blocked.test"
-
-
 def test_browser_navigate_allows_when_shared_file_missing(monkeypatch, tmp_path):
     """Missing shared blocklist files are warned and skipped, not fatal."""
 

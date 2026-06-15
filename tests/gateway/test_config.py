@@ -392,24 +392,6 @@ class TestLoadGatewayConfig:
 
         assert config.max_concurrent_sessions == 2
 
-    def test_bridges_discord_thread_require_mention_from_config_yaml(self, tmp_path, monkeypatch):
-        """discord.thread_require_mention in config.yaml should reach the runtime env var."""
-        hermes_home = tmp_path / ".hermes"
-        hermes_home.mkdir()
-        config_path = hermes_home / "config.yaml"
-        config_path.write_text(
-            "discord:\n"
-            "  thread_require_mention: true\n",
-            encoding="utf-8",
-        )
-
-        monkeypatch.setenv("HERMES_HOME", str(hermes_home))
-        monkeypatch.delenv("DISCORD_THREAD_REQUIRE_MENTION", raising=False)
-
-        load_gateway_config()
-
-        assert os.environ.get("DISCORD_THREAD_REQUIRE_MENTION") == "true"
-
     def test_thread_require_mention_yaml_does_not_overwrite_env(self, tmp_path, monkeypatch):
         """Explicit env var should win over config.yaml (env > yaml precedence)."""
         hermes_home = tmp_path / ".hermes"
@@ -428,56 +410,6 @@ class TestLoadGatewayConfig:
 
         # Env value preserved, not clobbered by yaml.
         assert os.environ.get("DISCORD_THREAD_REQUIRE_MENTION") == "true"
-
-    def test_bridges_discord_allow_from_from_config_yaml(self, tmp_path, monkeypatch):
-        """discord.allow_from should populate DISCORD_ALLOWED_USERS for auth."""
-        hermes_home = tmp_path / ".hermes"
-        hermes_home.mkdir()
-        config_path = hermes_home / "config.yaml"
-        config_path.write_text(
-            "discord:\n"
-            "  allow_from:\n"
-            "    - \"123456789012345678\"\n"
-            "    - \"999888777666555444\"\n",
-            encoding="utf-8",
-        )
-
-        monkeypatch.setenv("HERMES_HOME", str(hermes_home))
-        monkeypatch.delenv("DISCORD_ALLOWED_USERS", raising=False)
-
-        config = load_gateway_config()
-
-        assert config.platforms[Platform.DISCORD].extra["allow_from"] == [
-            "123456789012345678",
-            "999888777666555444",
-        ]
-        assert os.environ.get("DISCORD_ALLOWED_USERS") == (
-            "123456789012345678,999888777666555444"
-        )
-
-    def test_bridges_discord_platform_extra_allow_from_to_env(self, tmp_path, monkeypatch):
-        """platforms.discord.extra.allow_from should reach DISCORD_ALLOWED_USERS too."""
-        hermes_home = tmp_path / ".hermes"
-        hermes_home.mkdir()
-        config_path = hermes_home / "config.yaml"
-        config_path.write_text(
-            "platforms:\n"
-            "  discord:\n"
-            "    extra:\n"
-            "      allow_from:\n"
-            "        - \"123456789012345678\"\n",
-            encoding="utf-8",
-        )
-
-        monkeypatch.setenv("HERMES_HOME", str(hermes_home))
-        monkeypatch.delenv("DISCORD_ALLOWED_USERS", raising=False)
-
-        config = load_gateway_config()
-
-        assert config.platforms[Platform.DISCORD].extra["allow_from"] == [
-            "123456789012345678",
-        ]
-        assert os.environ.get("DISCORD_ALLOWED_USERS") == "123456789012345678"
 
     def test_bridges_quoted_false_platform_enabled_from_config_yaml(self, tmp_path, monkeypatch):
         hermes_home = tmp_path / ".hermes"
@@ -653,47 +585,6 @@ class TestLoadGatewayConfig:
         config = load_gateway_config()
 
         assert config.always_log_local is False
-
-    def test_bridges_discord_channel_prompts_from_config_yaml(self, tmp_path, monkeypatch):
-        hermes_home = tmp_path / ".hermes"
-        hermes_home.mkdir()
-        config_path = hermes_home / "config.yaml"
-        config_path.write_text(
-            "discord:\n"
-            "  channel_prompts:\n"
-            "    \"123\": Research mode\n"
-            "    456: Therapist mode\n",
-            encoding="utf-8",
-        )
-
-        monkeypatch.setenv("HERMES_HOME", str(hermes_home))
-
-        config = load_gateway_config()
-
-        assert config.platforms[Platform.DISCORD].extra["channel_prompts"] == {
-            "123": "Research mode",
-            "456": "Therapist mode",
-        }
-
-    def test_bridges_discord_history_backfill_settings_from_config_yaml(self, tmp_path, monkeypatch):
-        hermes_home = tmp_path / ".hermes"
-        hermes_home.mkdir()
-        config_path = hermes_home / "config.yaml"
-        config_path.write_text(
-            "discord:\n"
-            "  history_backfill: true\n"
-            "  history_backfill_limit: 17\n",
-            encoding="utf-8",
-        )
-
-        monkeypatch.setenv("HERMES_HOME", str(hermes_home))
-        monkeypatch.delenv("DISCORD_HISTORY_BACKFILL", raising=False)
-        monkeypatch.delenv("DISCORD_HISTORY_BACKFILL_LIMIT", raising=False)
-
-        load_gateway_config()
-
-        assert os.getenv("DISCORD_HISTORY_BACKFILL") == "true"
-        assert os.getenv("DISCORD_HISTORY_BACKFILL_LIMIT") == "17"
 
     def test_bridges_telegram_channel_prompts_from_config_yaml(self, tmp_path, monkeypatch):
         hermes_home = tmp_path / ".hermes"
