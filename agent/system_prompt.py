@@ -28,9 +28,7 @@ from typing import Any, Dict, List, Optional
 
 from agent.prompt_builder import (
     DEFAULT_AGENT_IDENTITY,
-    GOOGLE_MODEL_OPERATIONAL_GUIDANCE,
     HERMES_AGENT_HELP_GUIDANCE,
-    KANBAN_GUIDANCE,
     MEMORY_GUIDANCE,
     OPENAI_MODEL_EXECUTION_GUIDANCE,
     PLATFORM_HINTS,
@@ -119,16 +117,6 @@ def build_system_prompt_parts(agent: Any, system_message: Optional[str] = None) 
         tool_guidance.append(SESSION_SEARCH_GUIDANCE)
     if "skill_manage" in agent.valid_tool_names:
         tool_guidance.append(SKILLS_GUIDANCE)
-    # Kanban worker/orchestrator lifecycle — only present when the
-    # dispatcher spawned this process (kanban_show check_fn gates on
-    # HERMES_KANBAN_TASK env var). Normal chat sessions never see
-    # this block. Resolved once at __init__ (see _kanban_worker_guidance).
-    _kanban_guidance = getattr(agent, "_kanban_worker_guidance", None)
-    if _kanban_guidance:
-        tool_guidance.append(_kanban_guidance)
-    elif _kanban_guidance is None and "kanban_show" in agent.valid_tool_names:
-        # Fallback for code paths that bypass agent_init (rare).
-        tool_guidance.append(KANBAN_GUIDANCE)
     if tool_guidance:
         stable_parts.append(" ".join(tool_guidance))
 
@@ -136,12 +124,6 @@ def build_system_prompt_parts(agent: Any, system_message: Optional[str] = None) 
     # agent has tools. Static text → byte-stable prompt (no cache hit).
     if agent.valid_tool_names:
         stable_parts.append(STEER_CHANNEL_NOTE)
-
-    # Computer-use (macOS) — goes in as its own block rather than being
-    # merged into tool_guidance because the content is multi-paragraph.
-    if "computer_use" in agent.valid_tool_names:
-        from agent.prompt_builder import COMPUTER_USE_GUIDANCE
-        stable_parts.append(COMPUTER_USE_GUIDANCE)
 
     nous_subscription_prompt = _r.build_nous_subscription_prompt(agent.valid_tool_names)
     if nous_subscription_prompt:
@@ -170,10 +152,6 @@ def build_system_prompt_parts(agent: Any, system_message: Optional[str] = None) 
         if _inject:
             stable_parts.append(TOOL_USE_ENFORCEMENT_GUIDANCE)
             _model_lower = (agent.model or "").lower()
-            # Google model operational guidance (conciseness, absolute
-            # paths, parallel tool calls, verify-before-edit, etc.)
-            if "gemini" in _model_lower or "gemma" in _model_lower:
-                stable_parts.append(GOOGLE_MODEL_OPERATIONAL_GUIDANCE)
             # OpenAI GPT/Codex execution discipline (tool persistence,
             # prerequisite checks, verification, anti-hallucination).
             # Also applied to xAI Grok — same failure modes (claims completion

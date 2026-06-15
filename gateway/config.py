@@ -529,8 +529,9 @@ class GatewayConfig:
     # raw passthrough.
     filter_silence_narration: bool = True
 
-    # STT settings
-    stt_enabled: bool = True  # Whether to auto-transcribe inbound voice messages
+    # STT settings. Default off: transcription tools were removed from the
+    # lean agent, so inbound voice messages are not auto-transcribed.
+    stt_enabled: bool = False  # Whether to auto-transcribe inbound voice messages
 
     # Session isolation in shared chats
     group_sessions_per_user: bool = True  # Isolate group/channel sessions per participant when user IDs are available
@@ -721,7 +722,7 @@ class GatewayConfig:
             filter_silence_narration=_coerce_bool(
                 data.get("filter_silence_narration"), True
             ),
-            stt_enabled=_coerce_bool(stt_enabled, True),
+            stt_enabled=_coerce_bool(stt_enabled, False),
             group_sessions_per_user=_coerce_bool(group_sessions_per_user, True),
             thread_sessions_per_user=_coerce_bool(thread_sessions_per_user, False),
             max_concurrent_sessions=max_concurrent_sessions,

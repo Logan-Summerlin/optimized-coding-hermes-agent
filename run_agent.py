@@ -128,7 +128,6 @@ from model_tools import (
 )
 from tools.terminal_tool import cleanup_vm
 from tools.interrupt import set_interrupt as _set_interrupt
-from tools.browser_tool import cleanup_browser
 
 
 # Agent internals extracted to agent/ package for modularity
@@ -2734,16 +2733,6 @@ class AIAgent:
         """
         self._last_activity_ts = time.time()
         self._last_activity_desc = desc
-        if os.environ.get("HERMES_KANBAN_TASK"):
-            try:
-                from tools.kanban_tools import heartbeat_current_worker_from_env
-                heartbeat_current_worker_from_env()
-            except Exception:
-                # Never let the bridge break the agent loop.  The function
-                # already swallows exceptions internally; this outer guard
-                # covers import-time failures (kanban_tools unavailable,
-                # etc.) on niche deployment surfaces.
-                pass
 
     def _capture_rate_limits(self, http_response: Any) -> None:
         """Parse x-ratelimit-* headers from an HTTP response and cache the state.
@@ -3147,13 +3136,7 @@ class AIAgent:
         except Exception:
             pass
 
-        # 3. Clean browser daemon sessions
-        try:
-            cleanup_browser(task_id)
-        except Exception:
-            pass
-
-        # 4. Close active child agents
+        # 3. Close active child agents
         try:
             with self._active_children_lock:
                 children = list(self._active_children)
@@ -3357,34 +3340,8 @@ class AIAgent:
 
     @staticmethod
     def _cap_delegate_task_calls(tool_calls: list) -> list:
-        """Truncate excess delegate_task calls to max_concurrent_children.
-
-        The delegate_tool caps the task list inside a single call, but the
-        model can emit multiple separate delegate_task tool_calls in one
-        turn.  This truncates the excess, preserving all non-delegate calls.
-
-        Returns the original list if no truncation was needed.
-        """
-        from tools.delegate_tool import _get_max_concurrent_children
-        max_children = _get_max_concurrent_children()
-        delegate_count = sum(1 for tc in tool_calls if tc.function.name == "delegate_task")
-        if delegate_count <= max_children:
-            return tool_calls
-        kept_delegates = 0
-        truncated = []
-        for tc in tool_calls:
-            if tc.function.name == "delegate_task":
-                if kept_delegates < max_children:
-                    truncated.append(tc)
-                    kept_delegates += 1
-            else:
-                truncated.append(tc)
-        logger.warning(
-            "Truncated %d excess delegate_task call(s) to enforce "
-            "max_concurrent_children=%d limit",
-            delegate_count - max_children, max_children,
-        )
-        return truncated
+        """No-op: subagent delegation was removed from the lean agent."""
+        return tool_calls
 
     @staticmethod
     def _deduplicate_tool_calls(tool_calls: list) -> list:
@@ -4321,37 +4278,14 @@ class AIAgent:
             "and any other notable visual information."
         )
 
-        vision_source = str(image_url or "")
-        cleanup_path: Optional[Path] = None
-        if vision_source.startswith("data:"):
-            vision_source, cleanup_path = self._materialize_data_url_for_vision(vision_source)
-
-        description = ""
-        try:
-            from tools.vision_tools import vision_analyze_tool
-
-            result_json = asyncio.run(
-                vision_analyze_tool(image_url=vision_source, user_prompt=analysis_prompt)
-            )
-            result = json.loads(result_json) if isinstance(result_json, str) else {}
-            description = (result.get("analysis") or "").strip()
-        except Exception as e:
-            description = f"Image analysis failed: {e}"
-        finally:
-            if cleanup_path and cleanup_path.exists():
-                try:
-                    cleanup_path.unlink()
-                except OSError:
-                    pass
-
-        if not description:
-            description = "Image analysis failed."
-
-        note = f"[The {role_label} attached an image. Here's what it contains:\n{description}]"
-        if vision_source and not str(image_url or "").startswith("data:"):
-            note += (
-                f"\n[If you need a closer look, use vision_analyze with image_url: {vision_source}]"
-            )
+        # Image analysis was removed from the lean agent. For a non-vision
+        # model we can only note that an image was attached.
+        del analysis_prompt
+        note = (
+            f"[The {role_label} attached an image, but image analysis is not "
+            f"available in this build and the active model does not support "
+            f"vision natively, so its contents cannot be described.]"
+        )
 
         self._anthropic_image_fallback_cache[cache_key] = note
         return note
@@ -4562,17 +4496,6 @@ class AIAgent:
             return content
 
         summary = _multimodal_text_summary(result)
-        if tool_name == "computer_use":
-            return json.dumps({
-                "error": (
-                    "computer_use returned screenshot/image content, but the active "
-                    "model/provider does not support image input. Switch to a "
-                    "vision-capable model for desktop computer use, or use browser "
-                    "tools for browser tasks."
-                ),
-                "text_summary": summary,
-            })
-
         logger.warning(
             "Tool %s returned image content for non-vision model %s/%s; "
             "falling back to text summary",
@@ -5125,23 +5048,8 @@ class AIAgent:
             self._executing_tools = False
 
     def _dispatch_delegate_task(self, function_args: dict) -> str:
-        """Single call site for delegate_task dispatch.
-
-        New DELEGATE_TASK_SCHEMA fields only need to be added here to reach all
-        invocation paths (concurrent, sequential, inline).
-        """
-        from tools.delegate_tool import delegate_task as _delegate_task
-        return _delegate_task(
-            goal=function_args.get("goal"),
-            context=function_args.get("context"),
-            toolsets=function_args.get("toolsets"),
-            tasks=function_args.get("tasks"),
-            max_iterations=function_args.get("max_iterations"),
-            acp_command=function_args.get("acp_command"),
-            acp_args=function_args.get("acp_args"),
-            role=function_args.get("role"),
-            parent_agent=self,
-        )
+        """Subagent delegation was removed from the lean agent."""
+        raise RuntimeError("delegate_task is not available in this build")
 
     def _invoke_tool(self, function_name: str, function_args: dict, effective_task_id: str,
                      tool_call_id: Optional[str] = None, messages: list = None,
