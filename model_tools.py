@@ -253,8 +253,7 @@ _TOOL_DEFS_CACHE_MAX = 8
 
 def _clear_tool_defs_cache() -> None:
     """Drop memoized get_tool_definitions() results. Called when dynamic
-    schema dependencies change (e.g. discord capability cache reset,
-    execute_code sandbox reconfigured)."""
+    schema dependencies change (e.g. MCP server refresh, plugin load)."""
     _tool_defs_cache.clear()
 
 
@@ -287,9 +286,8 @@ def get_tool_definitions(
     # generation captures registry mutations (MCP refresh, plugin load).
     # check_fn results are TTL-cached one level down, inside
     # registry.get_definitions. The config-mtime fingerprint below captures
-    # user-visible config edits that affect dynamic schemas (execute_code
-    # mode, discord action allowlist, etc.) without needing an explicit
-    # invalidate hook on every config-writer.
+    # user-visible config edits that affect dynamic schemas without needing
+    # an explicit invalidate hook on every config-writer.
     if quiet_mode:
         try:
             from hermes_cli.config import get_config_path
@@ -815,12 +813,10 @@ def handle_function_call(
     Args:
         function_name: Name of the function to call.
         function_args: Arguments for the function.
-        task_id: Unique identifier for terminal/browser session isolation.
-        user_task: The user's original task (for browser_snapshot context).
-        enabled_tools: Tool names enabled for this session.  When provided,
-                       execute_code uses this list to determine which sandbox
-                       tools to generate.  Falls back to the process-global
-                       ``_last_resolved_tool_names`` for backward compat.
+        task_id: Unique identifier for terminal session isolation.
+        user_task: The user's original task (for tool context).
+        enabled_tools: Tool names enabled for this session.  Falls back to the
+                       process-global ``_last_resolved_tool_names`` when omitted.
         enabled_toolsets: The session's enabled toolsets.  Used to scope the
                        Tool Search bridge catalog so ``tool_search`` /
                        ``tool_describe`` / ``tool_call`` only see and invoke
