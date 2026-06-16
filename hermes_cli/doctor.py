@@ -1362,113 +1362,15 @@ def run_doctor(args):
         check_warn("ripgrep (rg) not found", "(file search uses grep fallback)")
         check_info(f"Install for faster search: {_system_package_install_cmd('ripgrep')}")
     
-    # Docker (optional)
+    # Terminal backend — the lean build only supports the local backend.
     terminal_env = os.getenv("TERMINAL_ENV", "local")
-    try:
-        from hermes_constants import is_container as _is_container
-        running_in_container = _is_container()
-    except Exception:
-        running_in_container = False
-
-    if running_in_container:
-        # Inside our container the Docker terminal backend is not
-        # configured by default (Docker-in-Docker isn't set up); the
-        # local backend is the intended one. Skip the noisy "docker
-        # not found" warning. If the user has explicitly chosen
-        # TERMINAL_ENV=docker inside the container they likely mounted
-        # /var/run/docker.sock, so fall through to the normal check.
-        if terminal_env != "docker":
-            check_info(
-                "Running inside a container — using local terminal backend "
-                "(docker-in-docker is not configured by default)"
-            )
-            # Skip to next section; Docker isn't relevant here.
-            terminal_env = "local"
-    if terminal_env == "docker":
-        if _safe_which("docker"):
-            # Check if docker daemon is running
-            try:
-                result = subprocess.run(["docker", "info"], capture_output=True, timeout=10)
-            except subprocess.TimeoutExpired:
-                result = None
-            if result is not None and result.returncode == 0:
-                check_ok("docker", "(daemon running)")
-            else:
-                _fail_and_issue("docker daemon not running", "", "Start Docker daemon", issues)
-        else:
-            _fail_and_issue(
-                "docker not found",
-                "(required for TERMINAL_ENV=docker)",
-                "Install Docker or change TERMINAL_ENV",
-                issues,
-            )
-    elif _safe_which("docker"):
-        check_ok("docker", "(optional)")
-    elif _is_termux():
-        check_info("Docker backend is not available inside Termux (expected on Android)")
-    elif running_in_container:
-        pass  # already explained above
-    else:
-        check_warn("docker not found", "(optional)")
-    
-    # SSH (if using ssh backend)
-    if terminal_env == "ssh":
-        ssh_host = os.getenv("TERMINAL_SSH_HOST")
-        if ssh_host:
-            ssh_user = os.getenv("TERMINAL_SSH_USER")
-            ssh_port = os.getenv("TERMINAL_SSH_PORT")
-            ssh_key = os.getenv("TERMINAL_SSH_KEY")
-            target = f"{ssh_user}@{ssh_host}" if ssh_user else ssh_host
-            cmd = ["ssh", "-o", "ConnectTimeout=5", "-o", "BatchMode=yes"]
-            if ssh_port:
-                cmd += ["-p", ssh_port]
-            if ssh_key:
-                cmd += ["-i", os.path.expanduser(ssh_key)]
-            cmd += [target, "echo ok"]
-            # Try to connect
-            try:
-                result = subprocess.run(
-                    cmd,
-                    capture_output=True,
-                    text=True,
-                    timeout=15
-                )
-            except subprocess.TimeoutExpired:
-                result = None
-            if result is not None and result.returncode == 0:
-                check_ok(f"SSH connection to {ssh_host}")
-            else:
-                _fail_and_issue(f"SSH connection to {ssh_host}", "", f"Check SSH configuration for {ssh_host}", issues)
-        else:
-            _fail_and_issue(
-                "TERMINAL_SSH_HOST not set",
-                "(required for TERMINAL_ENV=ssh)",
-                "Set TERMINAL_SSH_HOST in .env",
-                issues,
-            )
-    
-    # Daytona (if using daytona backend)
-    if terminal_env == "daytona":
-        daytona_key = os.getenv("DAYTONA_API_KEY")
-        if daytona_key:
-            check_ok("Daytona API key", "(configured)")
-        else:
-            _fail_and_issue(
-                "DAYTONA_API_KEY not set",
-                "(required for TERMINAL_ENV=daytona)",
-                "Set DAYTONA_API_KEY environment variable",
-                issues,
-            )
-        try:
-            from daytona import Daytona  # noqa: F401 — SDK presence check
-            check_ok("daytona SDK", "(installed)")
-        except ImportError:
-            _fail_and_issue(
-                "daytona SDK not installed",
-                "(pip install daytona)",
-                "Install daytona SDK: pip install daytona",
-                issues,
-            )
+    if terminal_env != "local":
+        _fail_and_issue(
+            f"TERMINAL_ENV={terminal_env} is not supported",
+            "(this lean build only supports the local backend)",
+            "Set TERMINAL_ENV=local (or unset it)",
+            issues,
+        )
 
     # Node.js + agent-browser (for browser automation tools)
     if _safe_which("node"):
