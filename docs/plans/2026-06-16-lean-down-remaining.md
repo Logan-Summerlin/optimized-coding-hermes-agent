@@ -1,5 +1,41 @@
 # Lean-Down: Remaining Work (Phase 4 & 5)
 
+> **Progress (2026-06-16, branch `claude/exciting-cray-lxxrab`)**
+>
+> Completed and tested (one commit each; `scripts/run_tests.sh` green for the
+> touched areas, `measure_context.py` holds at 4928/5000):
+> - **4.8** — dropped `optional-skills/` (7.2M) + packaging refs; skill infra
+>   degrades to an empty optional catalog (learning loop kept).
+> - **4.4** — terminal backends collapsed to **local-only**: deleted
+>   docker/ssh/singularity/modal/managed_modal/daytona + file_sync/modal_utils
+>   (~4000 lines); simplified `_create_environment`,
+>   `check_terminal_requirements`, `_REMOTE_TERMINAL_BACKENDS`, `env_probe`.
+> - **4.6** — removed the dead `execute_code` / `delegate_task` branches
+>   (dispatch, `check_execute_code_guard`, display/compression summaries,
+>   `MUTATING_TOOL_NAMES`, stub methods).
+> - **4.7 (partial)** — pruned the modal/daytona terminal-backend extras +
+>   lazy_deps entries + doctor checks. (croniter still core — gated on 4.3;
+>   TTS/FAL/honcho/browser-use extras not yet pruned.)
+> - **4.5 (scoped per owner decision: "artifacts + docs only")** — removed the
+>   OpenClaw migration subsystem and `website/` (27M), relocated the
+>   model-catalog seed to `assets/`. The web **dashboard backend/command was
+>   kept intact** (owner chose not to touch core `config.py`/`plugins.py`).
+> - **Phase 5** — README + top of AGENTS.md rewritten for the lean agent.
+>
+> Deferred — deeper Telegram-gateway / monolith coupling than the bullets
+> imply; doing them hastily risks the "never break the gateway/CLI" guardrail:
+> - **4.1 multi-profile** — woven through `cli.py` (638 KB), `file_safety.py`,
+>   and ~22 modules. Largest item; needs its own focused pass.
+> - **4.3 cron** — the scheduler ticker in `gateway/run.py` is shared by the
+>   curator, and `gateway/delivery.py` routes **agent responses too**, not just
+>   cron output. Separating cron from response delivery needs care.
+> - **4.2 (deep)** — `gateway/whatsapp_identity.py` is NOT leftover: its
+>   identifier helpers feed `gateway.session.build_session_key` for general
+>   Telegram DM/group keying. Removing it risks Telegram session continuity.
+>   The remaining non-Telegram platform refs are dead-but-harmless dispatch
+>   branches.
+
+
 Tracks the outstanding tasks for slimming this Hermes fork into a lean
 coding agent with a Telegram gateway. Phases 0–3 (recurring-context trim to
 ~5k, system-prompt consolidation, tool-schema trim, developer-doc stale-ref

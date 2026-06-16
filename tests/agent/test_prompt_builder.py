@@ -815,7 +815,6 @@ class TestEnvironmentHints:
         import agent.prompt_builder as _pb
         monkeypatch.setattr(_pb, "is_wsl", lambda: True)
         monkeypatch.delenv("TERMINAL_ENV", raising=False)
-        _pb._clear_backend_probe_cache()
         result = _pb.build_environment_hints()
         assert "/mnt/" in result
         assert "WSL" in result
@@ -830,7 +829,6 @@ class TestEnvironmentHints:
         monkeypatch.setattr(platform, "system", lambda: "Linux")
         monkeypatch.setattr(platform, "release", lambda: "6.8.0-generic")
         monkeypatch.delenv("TERMINAL_ENV", raising=False)
-        _pb._clear_backend_probe_cache()
         result = _pb.build_environment_hints()
         assert result != ""
         assert "Host: Linux" in result
@@ -848,7 +846,6 @@ class TestEnvironmentHints:
         monkeypatch.setattr(_pb, "is_wsl", lambda: False)
         monkeypatch.setattr(sys, "platform", "win32")
         monkeypatch.delenv("TERMINAL_ENV", raising=False)
-        _pb._clear_backend_probe_cache()
         result = _pb.build_environment_hints()
         assert "Host: Windows" in result
         assert "User home directory:" in result
@@ -865,33 +862,12 @@ class TestEnvironmentHints:
         monkeypatch.setattr(_pb, "is_wsl", lambda: False)
         monkeypatch.setattr(sys, "platform", "darwin")
         monkeypatch.delenv("TERMINAL_ENV", raising=False)
-        _pb._clear_backend_probe_cache()
         result = _pb.build_environment_hints()
         assert "Host: macOS" in result
         assert "User home directory:" in result
         # macOS must NOT get the Windows-specific callouts.
         assert "PowerShell" not in result
         assert "hostname" not in result
-
-    def test_build_environment_hints_suppresses_host_on_docker_backend(self, monkeypatch):
-        """Docker/remote backends must hide host info — the agent can only touch the backend."""
-        import agent.prompt_builder as _pb
-        import sys
-        monkeypatch.setattr(_pb, "is_wsl", lambda: False)
-        monkeypatch.setattr(sys, "platform", "win32")
-        monkeypatch.setenv("TERMINAL_ENV", "docker")
-        # Force the probe to fail so we exercise the static fallback path
-        # deterministically (the live probe would try to spin up docker).
-        monkeypatch.setattr(_pb, "_probe_remote_backend", lambda _t: None)
-        _pb._clear_backend_probe_cache()
-        result = _pb.build_environment_hints()
-        # Host suppression: none of the local-backend lines should appear.
-        assert "Host: Windows" not in result
-        assert "User home directory:" not in result
-        assert "PowerShell" not in result
-        # Backend info must appear instead.
-        assert "Terminal backend: docker" in result
-        assert "inside" in result.lower()
 
     def test_build_environment_hints_uses_terminal_cwd_over_launch_dir(self, monkeypatch, tmp_path):
         """THE BUG: gateway/cron set TERMINAL_CWD but the prompt emitted os.getcwd()
@@ -903,7 +879,6 @@ class TestEnvironmentHints:
         configured.mkdir()
         monkeypatch.setenv("TERMINAL_CWD", str(configured))
         monkeypatch.chdir(tmp_path)
-        _pb._clear_backend_probe_cache()
         assert f"Current working directory: {configured}" in _pb.build_environment_hints()
 
     def test_build_environment_hints_falls_back_to_launch_dir(self, monkeypatch, tmp_path):
@@ -913,30 +888,7 @@ class TestEnvironmentHints:
         monkeypatch.delenv("TERMINAL_ENV", raising=False)
         monkeypatch.delenv("TERMINAL_CWD", raising=False)
         monkeypatch.chdir(tmp_path)
-        _pb._clear_backend_probe_cache()
         assert f"Current working directory: {tmp_path}" in _pb.build_environment_hints()
-
-    def test_build_environment_hints_uses_live_probe_when_available(self, monkeypatch):
-        """When the probe succeeds, its output must appear in the hint block."""
-        import agent.prompt_builder as _pb
-        monkeypatch.setattr(_pb, "is_wsl", lambda: False)
-        monkeypatch.setenv("TERMINAL_ENV", "modal")
-        fake_probe_output = "  OS: Linux 6.8.0\n  User: root\n  Home: /root\n  Working directory: /workspace"
-        monkeypatch.setattr(_pb, "_probe_remote_backend", lambda _t: fake_probe_output)
-        _pb._clear_backend_probe_cache()
-        result = _pb.build_environment_hints()
-        assert "Terminal backend: modal" in result
-        assert "Linux 6.8.0" in result
-        assert "/workspace" in result
-
-    def test_remote_backend_list_covers_known_sandboxes(self):
-        """Regression guard: if someone adds a remote backend, they must list it here."""
-        import agent.prompt_builder as _pb
-        for backend in ("docker", "singularity", "modal", "daytona", "ssh"):
-            assert backend in _pb._REMOTE_TERMINAL_BACKENDS, (
-                f"{backend!r} must be in _REMOTE_TERMINAL_BACKENDS so its host "
-                f"info is suppressed in the system prompt"
-            )
 
     def test_environment_hint_from_env_var_is_appended(self, monkeypatch):
         """HERMES_ENVIRONMENT_HINT lets an embedder describe the runtime env."""
@@ -944,7 +896,6 @@ class TestEnvironmentHints:
         monkeypatch.setattr(_pb, "is_wsl", lambda: False)
         monkeypatch.delenv("TERMINAL_ENV", raising=False)
         monkeypatch.setenv("HERMES_ENVIRONMENT_HINT", "Running inside an OpenShell sandbox.")
-        _pb._clear_backend_probe_cache()
         result = _pb.build_environment_hints()
         assert "Running inside an OpenShell sandbox." in result
         # The factual host block must still come first.
@@ -960,7 +911,6 @@ class TestEnvironmentHints:
             "hermes_cli.config.load_config",
             lambda: {"agent": {"environment_hint": "CONFIG-VALUE"}},
         )
-        _pb._clear_backend_probe_cache()
         result = _pb.build_environment_hints()
         assert "ENV-WINS" in result
         assert "CONFIG-VALUE" not in result
@@ -975,7 +925,6 @@ class TestEnvironmentHints:
             "hermes_cli.config.load_config",
             lambda: {"agent": {"environment_hint": "CONFIG-VALUE"}},
         )
-        _pb._clear_backend_probe_cache()
         result = _pb.build_environment_hints()
         assert "CONFIG-VALUE" in result
 
@@ -986,7 +935,6 @@ class TestEnvironmentHints:
         monkeypatch.delenv("TERMINAL_ENV", raising=False)
         monkeypatch.delenv("HERMES_ENVIRONMENT_HINT", raising=False)
         monkeypatch.setattr("hermes_cli.config.load_config", lambda: {"agent": {}})
-        _pb._clear_backend_probe_cache()
         result = _pb.build_environment_hints()
         assert "Host:" in result
 

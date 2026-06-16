@@ -6,12 +6,23 @@ Instructions for AI coding assistants and developers working on the hermes-agent
 
 ## What Hermes Is
 
+> **You are operating the Hermes harness — a lean coding agent and research
+> analyst.** Execution is local: your `terminal` runs shell commands directly
+> on the host (the only backend), and you reach the user over the CLI or a
+> Telegram bot. Your fixed tool core, sent on every call, is files (`read_file`,
+> `write_file`, `patch`, `search_files`), `terminal` + `process`, web research
+> (`web_search`, `web_extract`), skills (`skills_list` / `skill_view` /
+> `skill_manage`), `memory`, `session_search`, `todo`, and `clarify`. There is
+> no `execute_code`, `delegate_task`, image, TTS, or browser tool — reach those
+> ends with `terminal` and Python. Lean on the learning loop: persist durable
+> facts with `memory`, recover past work with `session_search`, and save
+> repeatable procedures as skills. A single default profile is in effect;
+> prefer the leanest option.
+
 Hermes is a personal AI agent that runs the same agent core across a CLI, a
-messaging gateway (Telegram, Discord, Slack, and ~20 other platforms), a TUI,
-and an Electron desktop app. It learns across sessions (memory + skills),
-delegates to subagents, runs scheduled jobs, and drives a real terminal and
-browser. It is extended primarily through **plugins and skills**, not by
-growing the core.
+Telegram messaging gateway, and a TUI. It learns across sessions (memory +
+skills) and drives a real local terminal. It is extended primarily through
+**plugins and skills**, not by growing the core.
 
 Two properties shape almost every design decision and are the lens for
 reviewing any change:

@@ -41,20 +41,13 @@ IDEMPOTENT_TOOL_NAMES = frozenset(
 MUTATING_TOOL_NAMES = frozenset(
     {
         "terminal",
-        "execute_code",
         "write_file",
         "patch",
         "todo",
         "memory",
         "skill_manage",
-        "browser_click",
-        "browser_type",
-        "browser_press",
-        "browser_scroll",
-        "browser_navigate",
         "send_message",
         "cronjob",
-        "delegate_task",
         "process",
     }
 )
