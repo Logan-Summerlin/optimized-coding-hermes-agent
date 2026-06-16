@@ -822,9 +822,9 @@ import sys
 
 
 # Tool description for LLM
-TERMINAL_TOOL_DESCRIPTION = """Execute shell commands on a Linux environment. Working directory and exported env vars persist between calls — set up a virtualenv/env once per session, then reuse it. Use terminal for builds, installs, git, package managers, scripts, processes, and network — not for reading files (use read_file), searching (search_files), editing (patch), or creating files (write_file).
+TERMINAL_TOOL_DESCRIPTION = """Run shell commands in a persistent local Linux session. Use for builds, installs, git, scripts, processes, and network; use file tools for reading/searching/editing files.
 
-Foreground (default) returns instantly when the command finishes, so set a generous timeout for long commands. For long-running or never-exiting commands set background=true to get a session_id, pair bounded jobs with notify_on_complete=true, and check on them with process(action='poll'/'wait'). Use pty=true for interactive tools (Codex, Claude Code, REPLs); vim/nano hang without it.
+Foreground returns when done; set timeout for long commands. For long-running jobs use background=true (optionally notify_on_complete=true), then process(action='poll'/'wait'). Use pty=true for interactive tools/REPLs; vim/nano hang without it.
 """
 
 # Global state for environment lifecycle management

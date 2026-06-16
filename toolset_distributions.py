@@ -13,7 +13,7 @@ Usage:
     from toolset_distributions import get_distribution, list_distributions
     
     # Get a specific distribution
-    dist = get_distribution("image_gen")
+    dist = get_distribution("development")
     
     # List all available distributions
     all_dists = list_distributions()
@@ -27,198 +27,51 @@ from toolsets import validate_toolset
 # Distribution definitions
 # Each key is a distribution name, and the value is a dict of toolset_name: probability_percentage
 DISTRIBUTIONS = {
-    # Default: All tools available 100% of the time
     "default": {
-        "description": "All available tools, all the time",
-        "toolsets": {
-            "web": 100,
-            "vision": 100,
-            "image_gen": 100,
-            "terminal": 100,
-            "file": 100,
-            "moa": 100,
-            "browser": 100
-        }
+        "description": "Lean default: web, terminal, and file tools",
+        "toolsets": {"web": 100, "terminal": 100, "file": 100},
     },
-    
-    # Image generation focused distribution
-    "image_gen": {
-        "description": "Heavy focus on image generation with vision and web support",
-        "toolsets": {
-            "image_gen": 90,  # 80% chance of image generation tools
-            "vision": 90,      # 60% chance of vision tools
-            "web": 55,         # 40% chance of web tools
-            "terminal": 45,
-            "moa": 10          # 20% chance of reasoning tools
-        }
-    },
-    
-    # Research-focused distribution
     "research": {
-        "description": "Web research with vision analysis and reasoning",
-        "toolsets": {
-            "web": 90,       # 90% chance of web tools
-            "browser": 70,   # 70% chance of browser tools for deep research
-            "vision": 50,    # 50% chance of vision tools
-            "moa": 40,       # 40% chance of reasoning tools
-            "terminal": 10   # 10% chance of terminal tools
-        }
+        "description": "Web-first research with optional local notes",
+        "toolsets": {"web": 100, "file": 40, "terminal": 20},
     },
-
-    # Scientific problem solving focused distribution
-    "science": {
-        "description": "Scientific research with web, terminal, file, and browser capabilities",
-        "toolsets": {
-            "web": 94,       # 94% chance of web tools
-            "terminal": 94,  # 94% chance of terminal tools
-            "file": 94,      # 94% chance of file tools
-            "vision": 65,    # 65% chance of vision tools
-            "browser": 50,   # 50% chance of browser for accessing papers/databases
-            "image_gen": 15, # 15% chance of image generation tools
-            "moa": 10        # 10% chance of reasoning tools
-        }
-    },
-
-    # Development-focused distribution
     "development": {
-        "description": "Terminal, file tools, and reasoning with occasional web lookup",
-        "toolsets": {
-            "terminal": 80,  # 80% chance of terminal tools
-            "file": 80,      # 80% chance of file tools (read, write, patch, search)
-            "moa": 60,       # 60% chance of reasoning tools
-            "web": 30,       # 30% chance of web tools
-            "vision": 10     # 10% chance of vision tools
-        }
+        "description": "Coding tasks with local terminal, files, and web lookup",
+        "toolsets": {"terminal": 100, "file": 100, "web": 60},
     },
-    
-    # Safe mode (no terminal)
     "safe": {
-        "description": "All tools except terminal for safety",
-        "toolsets": {
-            "web": 80,
-            "browser": 70,   # Browser is safe (no local filesystem access)
-            "vision": 60,
-            "image_gen": 60,
-            "moa": 50
-        }
+        "description": "No terminal execution; web and file inspection only",
+        "toolsets": {"web": 100, "file": 60},
     },
-    
-    # Balanced distribution
     "balanced": {
-        "description": "Equal probability of all toolsets",
-        "toolsets": {
-            "web": 50,
-            "vision": 50,
-            "image_gen": 50,
-            "terminal": 50,
-            "file": 50,
-            "moa": 50,
-            "browser": 50
-        }
+        "description": "Balanced lean toolset probabilities",
+        "toolsets": {"web": 70, "terminal": 70, "file": 70},
     },
-    
-    # Minimal (web only)
     "minimal": {
         "description": "Only web tools for basic research",
-        "toolsets": {
-            "web": 100
-        }
+        "toolsets": {"web": 100},
     },
-    
-    # Terminal only
     "terminal_only": {
-        "description": "Terminal and file tools for code execution tasks",
-        "toolsets": {
-            "terminal": 100,
-            "file": 100
-        }
+        "description": "Terminal and file tools for local coding tasks",
+        "toolsets": {"terminal": 100, "file": 100},
     },
-    
-    # Terminal + web (common for coding tasks that need docs)
     "terminal_web": {
-        "description": "Terminal and file tools with web search for documentation lookup",
-        "toolsets": {
-            "terminal": 100,
-            "file": 100,
-            "web": 100
-        }
+        "description": "Terminal and file tools with web lookup",
+        "toolsets": {"terminal": 100, "file": 100, "web": 100},
     },
-    
-    # Creative (vision + image generation)
-    "creative": {
-        "description": "Image generation and vision analysis focus",
-        "toolsets": {
-            "image_gen": 90,
-            "vision": 90,
-            "web": 30
-        }
-    },
-    
-    # Reasoning heavy
-    "reasoning": {
-        "description": "Heavy mixture of agents usage with minimal other tools",
-        "toolsets": {
-            "moa": 90,
-            "web": 30,
-            "terminal": 20
-        }
-    },
-    
-    # Browser-based web interaction
-    "browser_use": {
-        "description": "Full browser-based web interaction with search, vision, and page control",
-        "toolsets": {
-            "browser": 100,  # All browser tools always available
-            "web": 80,       # Web search for finding URLs and quick lookups
-            "vision": 70     # Vision analysis for images found on pages
-        }
-    },
-    
-    # Browser only (no other tools)
-    "browser_only": {
-        "description": "Only browser automation tools for pure web interaction tasks",
-        "toolsets": {
-            "browser": 100
-        }
-    },
-    
-    # Browser-focused tasks distribution (for browser-use-tasks.jsonl)
-    "browser_tasks": {
-        "description": "Browser-focused distribution (browser toolset includes web_search for finding URLs since Google blocks direct browser searches)",
-        "toolsets": {
-            "browser": 97,   # 97% - browser tools (includes web_search) almost always available
-            "vision": 12,    # 12% - vision analysis occasionally
-            "terminal": 15   # 15% - terminal occasionally for local operations
-        }
-    },
-    
-    # Terminal-focused tasks distribution (for nous-terminal-tasks.jsonl)
     "terminal_tasks": {
-        "description": "Terminal-focused distribution with high terminal/file availability, occasional other tools",
-        "toolsets": {
-            "terminal": 97,   # 97% - terminal almost always available
-            "file": 97,       # 97% - file tools almost always available
-            "web": 97,        # 15% - web search/scrape for documentation
-            "browser": 75,    # 10% - browser occasionally for web interaction
-            "vision": 50,      # 8% - vision analysis rarely
-            "image_gen": 10    # 3% - image generation very rarely
-        }
+        "description": "Terminal-focused data generation tasks",
+        "toolsets": {"terminal": 97, "file": 97, "web": 35},
     },
-    
-    # Mixed browser+terminal tasks distribution (for mixed-browser-terminal-tasks.jsonl)
     "mixed_tasks": {
-        "description": "Mixed distribution with high browser, terminal, and file availability for complex tasks",
-        "toolsets": {
-            "browser": 92,    # 92% - browser tools highly available
-            "terminal": 92,   # 92% - terminal highly available
-            "file": 92,       # 92% - file tools highly available
-            "web": 35,        # 35% - web search/scrape fairly common
-            "vision": 15,     # 15% - vision analysis occasionally
-            "image_gen": 15   # 15% - image generation occasionally
-        }
-    }
+        "description": "Mixed lean local and web tasks",
+        "toolsets": {"terminal": 92, "file": 92, "web": 50},
+    },
+    "reasoning": {
+        "description": "Lean reasoning tasks with web lookup and optional terminal",
+        "toolsets": {"web": 60, "terminal": 30, "file": 30},
+    },
 }
-
 
 def get_distribution(name: str) -> Optional[Dict[str, any]]:
     """
@@ -340,7 +193,7 @@ if __name__ == "__main__":
     print("\n\n🎲 Sampling Examples:")
     print("-" * 40)
     
-    test_distributions = ["image_gen", "research", "balanced", "default"]
+    test_distributions = ["development", "research", "balanced", "default"]
     
     for dist_name in test_distributions:
         print(f"\n{dist_name}:")
@@ -359,6 +212,6 @@ if __name__ == "__main__":
     # Show detailed info
     print("\n\n📊 Detailed Distribution Info:")
     print("-" * 40)
-    print_distribution_info("image_gen")
+    print_distribution_info("development")
     print_distribution_info("research")
 

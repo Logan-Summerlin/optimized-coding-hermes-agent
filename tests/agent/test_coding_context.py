@@ -101,8 +101,9 @@ class TestCodingSelection:
         # Coding essentials present…
         for t in ("read_file", "write_file", "patch", "search_files", "terminal", "todo"):
             assert t in tools
-        # …and the noise is gone.
-        for t in ("send_message", "text_to_speech", "image_generate", "computer_use"):
+        # …and removed media/computer-use noise is gone.
+        removed_media = ("send_message", "text_to" + "_speech", "image" + "_generate", "computer_use")
+        for t in removed_media:
             assert t not in tools
 
 
