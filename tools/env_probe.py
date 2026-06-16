@@ -19,11 +19,6 @@ short line** when something non-default is detected.  When the
 environment looks normal (python3+pip both present and matched, no
 PEP 668), it emits nothing — no token cost.
 
-Remote terminal backends (docker, modal, ssh, …) are skipped: the
-host's Python state is irrelevant when tools run inside a sandbox.
-The sandbox has its own existing probe (``_probe_remote_backend``)
-in ``agent/prompt_builder.py``.
-
 Toggle via ``agent.environment_probe`` in config.yaml (default True).
 """
 
@@ -44,14 +39,6 @@ logger = logging.getLogger(__name__)
 # mid-session in any way that would matter for the system prompt.
 _CACHE_LOCK = threading.Lock()
 _CACHED_LINE: Optional[str] = None  # None = not probed yet; "" = probed, nothing to say.
-
-# Remote backends — keep in sync with agent/prompt_builder.py:_REMOTE_TERMINAL_BACKENDS.
-# Duplicated rather than imported to avoid a circular import (prompt_builder
-# imports nothing from tools).
-_REMOTE_BACKENDS = frozenset({
-    "docker", "singularity", "modal", "daytona", "ssh", "managed_modal",
-})
-
 
 def _run(cmd: list[str], timeout: float = 3.0) -> tuple[int, str, str]:
     """Run a short subprocess.  Returns (returncode, stdout, stderr).
@@ -142,10 +129,10 @@ def _build_probe_line() -> str:
     Emit only when SOMETHING is off — the goal is to save the model from
     hitting an avoidable wall, not to narrate a healthy environment.
     """
-    # Bail out if a remote terminal backend is configured; the host's
-    # Python state isn't where the agent's tools run.
+    # Bail out if a non-local terminal backend is somehow configured; the
+    # host's Python state isn't where the agent's tools run.
     backend = (os.getenv("TERMINAL_ENV") or "local").strip().lower()
-    if backend in _REMOTE_BACKENDS:
+    if backend != "local":
         return ""
 
     py3_ver = _python_version_of("python3")

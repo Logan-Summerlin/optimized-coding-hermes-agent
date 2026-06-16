@@ -39,19 +39,17 @@ class TestParseEnvVar:
             config = _tt_mod._get_env_config()
             assert config["docker_forward_env"] == ["GITHUB_TOKEN", "NPM_TOKEN"]
 
-    def test_create_environment_passes_docker_forward_env(self):
-        fake_env = object()
-        with patch.object(_tt_mod, "_DockerEnvironment", return_value=fake_env) as mock_docker:
-            result = _tt_mod._create_environment(
+    def test_create_environment_rejects_non_local_backend(self):
+        import pytest
+
+        with pytest.raises(ValueError, match="local"):
+            _tt_mod._create_environment(
                 "docker",
                 image="python:3.11",
                 cwd="/root",
                 timeout=180,
                 container_config={"docker_forward_env": ["GITHUB_TOKEN"]},
             )
-
-        assert result is fake_env
-        assert mock_docker.call_args.kwargs["forward_env"] == ["GITHUB_TOKEN"]
 
     def test_falls_back_to_default(self):
         with patch.dict("os.environ", {}, clear=False):

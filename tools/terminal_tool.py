@@ -2,24 +2,13 @@
 """
 Terminal Tool Module
 
-A terminal tool that executes commands in local, Docker, Modal, SSH,
-Singularity, and Daytona environments. Supports local execution,
-containerized backends, and cloud sandboxes, including managed Modal mode.
-
-Supported environments:
-- "local": Execute directly on the host machine (default, fastest)
-- "docker": Execute in Docker containers (isolated, requires Docker)
-- "modal": Execute in Modal cloud sandboxes (direct Modal or managed gateway)
+A terminal tool that executes shell commands on the local host. This lean
+build ships a single backend — ``local`` (TERMINAL_ENV=local, the default).
 
 Features:
-- Multiple execution backends (local, docker, modal)
 - Background task support
-- VM/container lifecycle management
+- Process lifecycle management
 - Automatic cleanup after inactivity
-
-Cloud sandbox note:
-- Persistent filesystems preserve working state across sandbox recreation
-- Persistent filesystems do NOT guarantee the same live sandbox or long-running processes survive cleanup, idle reaping, or Hermes exit
 
 Usage:
     from terminal_tool import terminal_tool
@@ -61,19 +50,23 @@ from tools.interrupt import is_interrupted, _interrupt_event  # noqa: F401 — r
 
 
 
-# =============================================================================
-# Custom Singularity Environment with more space
-# =============================================================================
+def _get_scratch_dir() -> Path:
+    """Return the scratch directory used for sandbox bookkeeping/cleanup.
 
-# Singularity helpers (scratch dir, SIF cache) now live in tools/environments/singularity.py
-from tools.environments.singularity import _get_scratch_dir
-from tools.tool_backend_helpers import (
-    coerce_modal_mode,
-    has_direct_modal_credentials,
-    managed_nous_tools_enabled,
-    nous_tool_gateway_unavailable_message,
-    resolve_modal_backend_state,
-)
+    Honors ``TERMINAL_SCRATCH_DIR`` when set; otherwise falls back to the
+    Hermes sandbox dir. (The lean build only runs the local backend, so this
+    is just a cleanup root for any leftover ``hermes-*`` working dirs.)
+    """
+    custom_scratch = os.getenv("TERMINAL_SCRATCH_DIR")
+    if custom_scratch:
+        scratch_path = Path(custom_scratch)
+        scratch_path.mkdir(parents=True, exist_ok=True)
+        return scratch_path
+
+    from tools.environments.base import get_sandbox_dir
+    sandbox = get_sandbox_dir()
+    sandbox.mkdir(parents=True, exist_ok=True)
+    return sandbox
 
 
 def _safe_parse_import_env(
@@ -822,14 +815,9 @@ def _transform_sudo_command(command: str | None) -> tuple[str | None, str | None
     return command, None
 
 
-# Environment classes now live in tools/environments/
+# Environment classes now live in tools/environments/. The lean build only
+# ships the local backend.
 from tools.environments.local import LocalEnvironment as _LocalEnvironment
-from tools.environments.singularity import SingularityEnvironment as _SingularityEnvironment
-from tools.environments.ssh import SSHEnvironment as _SSHEnvironment
-from tools.environments.docker import DockerEnvironment as _DockerEnvironment
-from tools.environments.modal import ModalEnvironment as _ModalEnvironment
-from tools.environments.managed_modal import ManagedModalEnvironment as _ManagedModalEnvironment
-from tools.managed_tool_gateway import is_managed_tool_gateway_ready
 import sys
 
 
@@ -847,77 +835,6 @@ _creation_locks: Dict[str, threading.Lock] = {}  # Per-task locks for sandbox cr
 _creation_locks_lock = threading.Lock()  # Protects _creation_locks dict itself
 _cleanup_thread = None
 _cleanup_running = False
-
-# Once-per-process guard for the docker orphan reaper (issue #20561).
-# Set when _maybe_reap_docker_orphans first runs; concurrent _create_environment
-# calls for parallel subagents won't re-trigger the sweep.
-_docker_orphan_reaper_ran = False
-_docker_orphan_reaper_lock = threading.Lock()
-
-
-def _maybe_reap_docker_orphans(container_config: Dict[str, Any]) -> None:
-    """Run the docker orphan reaper once per process, if enabled.
-
-    Sweeps long-Exited containers labeled ``hermes-agent=1`` for the current
-    profile that match the issue #20561 leak class — containers left behind
-    by Hermes processes that exited without firing ``atexit`` (SIGKILL,
-    OOM, terminal-window-close). The reaper is conservative by default:
-    only Exited containers older than ``2 × lifetime_seconds`` and scoped to
-    the current profile.
-
-    Gates:
-
-    * ``terminal.docker_orphan_reaper: false`` disables it entirely (the
-      operator opted out — usually because they're running multiple
-      Hermes processes in the same profile and don't trust the
-      conservative defaults).
-    * ``_docker_orphan_reaper_ran`` flag — sweep runs once per Python
-      interpreter, not on every subagent / RL-rollout / parallel
-      ``terminal()`` call.
-    """
-    global _docker_orphan_reaper_ran
-    if not container_config.get("docker_orphan_reaper", True):
-        return
-    # Cheap double-checked-locking: read without the lock, take the lock
-    # only on first run, recheck inside.
-    if _docker_orphan_reaper_ran:
-        return
-    with _docker_orphan_reaper_lock:
-        if _docker_orphan_reaper_ran:
-            return
-        _docker_orphan_reaper_ran = True
-
-    # 2 × lifetime_seconds gives sibling Hermes processes a generous grace
-    # window. Floor at 60s so an operator with TERMINAL_LIFETIME_SECONDS=0
-    # doesn't get an instant-reap that races their own setup.
-    # ``container_config`` only carries container_* keys, so read
-    # lifetime_seconds from the env var the rest of the module uses.
-    try:
-        lifetime = int(os.getenv("TERMINAL_LIFETIME_SECONDS", "300"))
-    except (TypeError, ValueError):
-        lifetime = 300
-    lifetime = max(60, lifetime)
-    max_age = lifetime * 2
-
-    try:
-        from tools.environments.docker import (
-            reap_orphan_containers, _get_active_profile_name,
-        )
-    except ImportError:
-        return
-    try:
-        profile = _get_active_profile_name()
-        removed = reap_orphan_containers(
-            max_age_seconds=max_age, profile_filter=profile,
-        )
-        if removed:
-            logger.info(
-                "Docker orphan reaper removed %d stale container(s) for profile %s",
-                removed, profile,
-            )
-    except Exception as e:
-        # Never fail the env-creation path because of a janitor problem.
-        logger.debug("Docker orphan reaper raised: %s", e)
 
 
 # Per-task environment overrides registry.
@@ -1122,7 +1039,7 @@ def _get_env_config() -> Dict[str, Any]:
 
     return {
         "env_type": env_type,
-        "modal_mode": coerce_modal_mode(os.getenv("TERMINAL_MODAL_MODE", "auto")),
+        "modal_mode": os.getenv("TERMINAL_MODAL_MODE", "auto"),
         "docker_image": os.getenv("TERMINAL_DOCKER_IMAGE", default_image),
         "docker_forward_env": docker_forward_env,
         "singularity_image": os.getenv("TERMINAL_SINGULARITY_IMAGE", f"docker://{default_image}"),
@@ -1175,14 +1092,6 @@ def _get_env_config() -> Dict[str, Any]:
     }
 
 
-def _get_modal_backend_state(modal_mode: object | None) -> Dict[str, Any]:
-    """Resolve direct vs managed Modal backend selection."""
-    return resolve_modal_backend_state(
-        modal_mode,
-        has_direct=has_direct_modal_credentials(),
-        managed_ready=is_managed_tool_gateway_ready("modal"),
-    )
-
 
 def _create_environment(env_type: str, image: str, cwd: str, timeout: int,
                         ssh_config: dict = None, container_config: dict = None,
@@ -1206,132 +1115,13 @@ def _create_environment(env_type: str, image: str, cwd: str, timeout: int,
     Returns:
         Environment instance with execute() method
     """
-    cc = container_config or {}
-    cpu = cc.get("container_cpu", 1)
-    memory = cc.get("container_memory", 5120)
-    disk = cc.get("container_disk", 51200)
-    persistent = cc.get("container_persistent", True)
-    volumes = cc.get("docker_volumes", [])
-    docker_forward_env = cc.get("docker_forward_env", [])
-    docker_env = cc.get("docker_env", {})
-    docker_extra_args = cc.get("docker_extra_args", [])
-
     if env_type == "local":
         return _LocalEnvironment(cwd=cwd, timeout=timeout)
-    
-    elif env_type == "docker":
-        # One-shot orphan reaper: clean up labeled containers left behind by
-        # prior Hermes processes that hit SIGKILL / OOM / a closed terminal
-        # before the atexit cleanup hook could run.  Gated to once per
-        # process so concurrent _create_environment calls (parallel
-        # subagents, RL benchmarks) don't run the reaper N times.
-        # Disable via ``terminal.docker_orphan_reaper: false`` (issue #20561).
-        _maybe_reap_docker_orphans(cc)
-        return _DockerEnvironment(
-            image=image, cwd=cwd, timeout=timeout,
-            cpu=cpu, memory=memory, disk=disk,
-            persistent_filesystem=persistent, task_id=task_id,
-            volumes=volumes,
-            host_cwd=host_cwd,
-            auto_mount_cwd=cc.get("docker_mount_cwd_to_workspace", False),
-            forward_env=docker_forward_env,
-            env=docker_env,
-            run_as_host_user=cc.get("docker_run_as_host_user", False),
-            extra_args=docker_extra_args,
-            persist_across_processes=cc.get("docker_persist_across_processes", True),
-        )
-    
-    elif env_type == "singularity":
-        return _SingularityEnvironment(
-            image=image, cwd=cwd, timeout=timeout,
-            cpu=cpu, memory=memory, disk=disk,
-            persistent_filesystem=persistent, task_id=task_id,
-        )
-    
-    elif env_type == "modal":
-        sandbox_kwargs = {}
-        if cpu > 0:
-            sandbox_kwargs["cpu"] = cpu
-        if memory > 0:
-            sandbox_kwargs["memory"] = memory
-        if disk > 0:
-            try:
-                import inspect, modal
-                if "ephemeral_disk" in inspect.signature(modal.Sandbox.create).parameters:
-                    sandbox_kwargs["ephemeral_disk"] = disk
-            except Exception:
-                pass
 
-        modal_state = _get_modal_backend_state(cc.get("modal_mode"))
-
-        if modal_state["selected_backend"] == "managed":
-            return _ManagedModalEnvironment(
-                image=image, cwd=cwd, timeout=timeout,
-                modal_sandbox_kwargs=sandbox_kwargs,
-                persistent_filesystem=persistent, task_id=task_id,
-            )
-
-        if modal_state["selected_backend"] != "direct":
-            if modal_state["managed_mode_blocked"]:
-                raise ValueError(
-                    "Modal backend is configured for managed mode, but "
-                    "Nous Tool Gateway access is not currently available and no direct "
-                    "Modal credentials/config were found. "
-                    + nous_tool_gateway_unavailable_message(
-                        "managed Modal execution",
-                    )
-                    + " Choose TERMINAL_MODAL_MODE=direct/auto to use direct Modal credentials."
-                )
-            if modal_state["mode"] == "managed":
-                raise ValueError(
-                    "Modal backend is configured for managed mode, but the managed tool gateway is unavailable. "
-                    + nous_tool_gateway_unavailable_message(
-                        "managed Modal execution",
-                    )
-                )
-            if modal_state["mode"] == "direct":
-                raise ValueError(
-                    "Modal backend is configured for direct mode, but no direct Modal credentials/config were found."
-                )
-            message = "Modal backend selected but no direct Modal credentials/config was found."
-            if managed_nous_tools_enabled():
-                message = (
-                    "Modal backend selected but no direct Modal credentials/config or managed tool gateway was found."
-                )
-            raise ValueError(message)
-
-        return _ModalEnvironment(
-            image=image, cwd=cwd, timeout=timeout,
-            modal_sandbox_kwargs=sandbox_kwargs,
-            persistent_filesystem=persistent, task_id=task_id,
-        )
-    
-    elif env_type == "daytona":
-        # Lazy import so daytona SDK is only required when backend is selected.
-        from tools.environments.daytona import DaytonaEnvironment as _DaytonaEnvironment
-        return _DaytonaEnvironment(
-            image=image, cwd=cwd, timeout=timeout,
-            cpu=int(cpu), memory=memory, disk=disk,
-            persistent_filesystem=persistent, task_id=task_id,
-        )
-
-    elif env_type == "ssh":
-        if not ssh_config or not ssh_config.get("host") or not ssh_config.get("user"):
-            raise ValueError("SSH environment requires ssh_host and ssh_user to be configured")
-        return _SSHEnvironment(
-            host=ssh_config["host"],
-            user=ssh_config["user"],
-            port=ssh_config.get("port", 22),
-            key_path=ssh_config.get("key", ""),
-            cwd=cwd,
-            timeout=timeout,
-        )
-
-    else:
-        raise ValueError(
-            f"Unknown environment type: {env_type}. Use 'local', 'docker', "
-            f"'singularity', 'modal', 'daytona', or 'ssh'"
-        )
+    raise ValueError(
+        f"Unsupported terminal backend: {env_type!r}. This lean build only "
+        "supports the 'local' backend — set TERMINAL_ENV=local (the default)."
+    )
 
 
 def _cleanup_inactive_envs(lifetime_seconds: int = 300):
@@ -2436,114 +2226,24 @@ def terminal_tool(
 
 
 def check_terminal_requirements() -> bool:
-    """Check if all requirements for the terminal tool are met."""
-    try:
-        config = _get_env_config()
-        env_type = config["env_type"]
+    """Check if all requirements for the terminal tool are met.
 
+    The lean build only supports the local backend; any other ``TERMINAL_ENV``
+    is rejected up front.
+    """
+    try:
+        env_type = _get_env_config()["env_type"]
         if env_type == "local":
             return True
-
-        elif env_type == "docker":
-            from tools.environments.docker import find_docker
-            docker = find_docker()
-            if not docker:
-                logger.error("Docker executable not found in PATH or common install locations")
-                return False
-            result = subprocess.run([docker, "version"], capture_output=True, timeout=5, stdin=subprocess.DEVNULL)
-            return result.returncode == 0
-
-        elif env_type == "singularity":
-            executable = shutil.which("apptainer") or shutil.which("singularity")
-            if executable:
-                result = subprocess.run([executable, "--version"], capture_output=True, timeout=5, stdin=subprocess.DEVNULL)
-                return result.returncode == 0
-            return False
-
-        elif env_type == "ssh":
-            if not config.get("ssh_host") or not config.get("ssh_user"):
-                logger.error(
-                    "SSH backend selected but TERMINAL_SSH_HOST and TERMINAL_SSH_USER "
-                    "are not both set. Configure both or switch TERMINAL_ENV to 'local'."
-                )
-                return False
-            return True
-
-        elif env_type == "modal":
-            modal_state = _get_modal_backend_state(config.get("modal_mode"))
-            if modal_state["selected_backend"] == "managed":
-                return True
-
-            if modal_state["selected_backend"] != "direct":
-                if modal_state["managed_mode_blocked"]:
-                    logger.error(
-                        "Modal backend selected with TERMINAL_MODAL_MODE=managed, but "
-                        "Nous Tool Gateway access is not currently available and no direct "
-                        "Modal credentials/config were found. %s Choose "
-                        "TERMINAL_MODAL_MODE=direct/auto to use direct Modal credentials.",
-                        nous_tool_gateway_unavailable_message(
-                            "managed Modal execution",
-                        ),
-                    )
-                    return False
-                if modal_state["mode"] == "managed":
-                    logger.error(
-                        "Modal backend selected with TERMINAL_MODAL_MODE=managed, but the managed "
-                        "tool gateway is unavailable. %s",
-                        nous_tool_gateway_unavailable_message(
-                            "managed Modal execution",
-                        ),
-                    )
-                    return False
-                elif modal_state["mode"] == "direct":
-                    if managed_nous_tools_enabled():
-                        logger.error(
-                            "Modal backend selected with TERMINAL_MODAL_MODE=direct, but no direct "
-                            "Modal credentials/config were found. Configure Modal or choose "
-                            "TERMINAL_MODAL_MODE=managed/auto."
-                        )
-                    else:
-                        logger.error(
-                            "Modal backend selected with TERMINAL_MODAL_MODE=direct, but no direct "
-                            "Modal credentials/config were found. Configure Modal or choose "
-                            "TERMINAL_MODAL_MODE=auto."
-                        )
-                    return False
-                else:
-                    if managed_nous_tools_enabled():
-                        logger.error(
-                            "Modal backend selected but no direct Modal credentials/config or managed "
-                            "tool gateway was found. Configure Modal, set up the managed gateway, "
-                            "or choose a different TERMINAL_ENV."
-                        )
-                    else:
-                        logger.error(
-                            "Modal backend selected but no direct Modal credentials/config was found. "
-                            "Configure Modal or choose a different TERMINAL_ENV."
-                        )
-                    return False
-
-            if importlib.util.find_spec("modal") is None:
-                logger.error("modal is required for direct modal terminal backend: pip install modal")
-                return False
-
-            return True
-
-        elif env_type == "daytona":
-            from daytona import Daytona  # noqa: F401 — SDK presence check
-            return os.getenv("DAYTONA_API_KEY") is not None
-
-        else:
-            logger.error(
-                "Unknown TERMINAL_ENV '%s'. Use one of: local, docker, singularity, "
-                "modal, daytona, ssh.",
-                env_type,
-            )
-            return False
+        logger.error(
+            "Unsupported TERMINAL_ENV %r. This lean build only supports the "
+            "'local' backend.",
+            env_type,
+        )
+        return False
     except Exception as e:
         logger.error("Terminal requirements check failed: %s", e, exc_info=True)
         return False
-
 
 if __name__ == "__main__":
     # Simple test when run directly
