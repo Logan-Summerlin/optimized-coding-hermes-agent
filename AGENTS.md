@@ -6,12 +6,26 @@ Instructions for AI coding assistants and developers working on the hermes-agent
 
 ## What Hermes Is
 
+> **This fork is a lean coding agent and research analyst.** It is a trimmed
+> subset of upstream Hermes, optimized so a capable small model (GPT-5-mini,
+> Claude Haiku) can drive it well. It keeps the agent core, the **learning
+> loop** (memory + `session_search` + skills), the **Telegram gateway**, and
+> the CLI. It deliberately drops the heavier subsystems that upstream ships:
+> the extra messaging platforms (only Telegram + CLI remain), the cron
+> scheduler, multi-backend remote terminals (only the **local** terminal
+> backend remains), multi-profile support, the web dashboard's heavier
+> surfaces, and tools like `execute_code` / `delegate_task` / image / TTS /
+> browser. The core model toolset is ~15 tools: files (`read_file`,
+> `write_file`, `patch`, `search_files`), local `terminal` + `process`, web
+> research (`web_search`, `web_extract`), skills, `memory`, `session_search`,
+> `todo`, and `clarify`. Sections below that describe upstream's expansive
+> "breadth at the edges" philosophy do not all apply to this fork — when in
+> doubt, prefer the leaner option.
+
 Hermes is a personal AI agent that runs the same agent core across a CLI, a
-messaging gateway (Telegram, Discord, Slack, and ~20 other platforms), a TUI,
-and an Electron desktop app. It learns across sessions (memory + skills),
-delegates to subagents, runs scheduled jobs, and drives a real terminal and
-browser. It is extended primarily through **plugins and skills**, not by
-growing the core.
+Telegram messaging gateway, and a TUI. It learns across sessions (memory +
+skills) and drives a real local terminal. It is extended primarily through
+**plugins and skills**, not by growing the core.
 
 Two properties shape almost every design decision and are the lens for
 reviewing any change:
