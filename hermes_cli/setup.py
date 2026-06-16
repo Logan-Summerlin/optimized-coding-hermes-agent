@@ -1868,46 +1868,8 @@ def _setup_slack():
 
 
 def _write_slack_manifest_and_instruct():
-    """Generate the Slack manifest, write it under HERMES_HOME, and print
-    paste-into-Slack instructions.
-
-    Exposed as its own helper so both the initial setup flow and the
-    "reconfigure? → no" branch can refresh the manifest without the user
-    re-entering tokens. Failures are non-fatal — if the manifest write
-    fails for any reason, we print a warning and skip rather than abort
-    the whole Slack setup.
-    """
-    try:
-        from hermes_cli.slack_cli import _build_full_manifest
-        from hermes_constants import get_hermes_home
-
-        manifest = _build_full_manifest(
-            bot_name="Hermes",
-            bot_description="Your Hermes agent on Slack",
-        )
-        target = Path(get_hermes_home()) / "slack-manifest.json"
-        target.parent.mkdir(parents=True, exist_ok=True)
-        import json as _json
-        target.write_text(
-            _json.dumps(manifest, indent=2, ensure_ascii=False) + "\n",
-            encoding="utf-8",
-        )
-        print_success(f"Slack app manifest written to: {target}")
-        print_info(
-            "   Paste it into https://api.slack.com/apps → your app → Features "
-            "→ App Manifest → Edit, then Save.  Slack will prompt to "
-            "reinstall if scopes or slash commands changed."
-        )
-        print_info(
-            "   Re-run `hermes slack manifest --write` anytime to refresh after "
-            "Hermes adds new commands."
-        )
-    except Exception as exc:  # pragma: no cover - best-effort UX helper
-        print_warning(f"Couldn't write Slack manifest: {exc}")
-        print_info(
-            "   You can generate it manually later with: "
-            "hermes slack manifest --write"
-        )
+    """Slack manifest generation was removed from the lean CLI surface."""
+    print_info("Slack manifest generation is not bundled in the lean fork.")
 
 
 def _setup_matrix():

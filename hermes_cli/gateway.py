@@ -5050,30 +5050,9 @@ def _setup_dingtalk():
     )
 
     if method == 0:
-        # ── QR-code device-flow authorization ──
-        try:
-            from hermes_cli.dingtalk_auth import dingtalk_qr_auth
-        except ImportError as exc:
-            print_warning(
-                f"  QR auth module failed to load ({exc}), falling back to manual input."
-            )
-            _setup_standard_platform(dingtalk_platform)
-            return
+        print_warning("  QR auth is not bundled in the lean fork; using manual setup.")
 
-        result = dingtalk_qr_auth()
-        if result is None:
-            print_warning("  QR auth incomplete, falling back to manual input.")
-            _setup_standard_platform(dingtalk_platform)
-            return
-
-        client_id, client_secret = result
-        save_env_value("DINGTALK_CLIENT_ID", client_id)
-        save_env_value("DINGTALK_CLIENT_SECRET", client_secret)
-        print()
-        print_success(f"{emoji} {label} configured via QR scan!")
-    else:
-        # ── Manual entry ──
-        _setup_standard_platform(dingtalk_platform)
+    _setup_standard_platform(dingtalk_platform)
 
 
 def _setup_wecom():

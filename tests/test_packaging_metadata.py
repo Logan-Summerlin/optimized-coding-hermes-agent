@@ -99,14 +99,14 @@ def test_packaging_declared_as_core_dependency():
     )
 
 
-def test_faster_whisper_is_not_a_base_dependency():
+def test_removed_voice_dependencies_are_not_packaged():
     data = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
     deps = data["project"]["dependencies"]
+    extras = data["project"]["optional-dependencies"]
 
     assert not any(dep.startswith("faster-whisper") for dep in deps)
-
-    voice_extra = data["project"]["optional-dependencies"]["voice"]
-    assert any(dep.startswith("faster-whisper") for dep in voice_extra)
+    assert "voice" not in extras
+    assert "tts-premium" not in extras
 
 
 def test_manifest_includes_bundled_skills():

@@ -1013,35 +1013,35 @@ SKILL_MANAGE_SCHEMA = {
             },
             "name": {
                 "type": "string",
-                "description": "Skill name (lowercase, hyphens/underscores, max 64 chars). Must match an existing skill for patch/edit/delete/write_file/remove_file."
+                "description": "Skill name; existing for patch/edit/delete/file actions."
             },
             "content": {
                 "type": "string",
-                "description": "Full SKILL.md content (YAML frontmatter + markdown body). Required for 'create' and 'edit'; for 'edit' provide the complete updated text."
+                "description": "Full SKILL.md for create/edit."
             },
             "old_string": {
                 "type": "string",
-                "description": "Text to find (required for 'patch'). Must be unique unless replace_all=true — include surrounding context."
+                "description": "Unique text to replace for patch."
             },
             "new_string": {
                 "type": "string",
-                "description": "Replacement text (required for 'patch'). Empty string deletes the matched text."
+                "description": "Replacement text; empty deletes."
             },
             "replace_all": {
                 "type": "boolean",
-                "description": "For 'patch': replace all occurrences instead of requiring a unique match (default: false)."
+                "description": "Patch all matches (default false)."
             },
             "category": {
                 "type": "string",
-                "description": "Optional category subdirectory for organizing the skill (e.g. 'devops'). Only used with 'create'."
+                "description": "Optional category for create."
             },
             "file_path": {
                 "type": "string",
-                "description": "Supporting file within the skill dir. Required for write_file/remove_file (under references/, templates/, scripts/, or assets/); optional for patch (defaults to SKILL.md)."
+                "description": "Skill-relative support file path."
             },
             "file_content": {
                 "type": "string",
-                "description": "Content for the file. Required for 'write_file'."
+                "description": "Content for write_file."
             },
             "absorbed_into": {
                 "type": "string",

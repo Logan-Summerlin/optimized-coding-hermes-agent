@@ -2550,25 +2550,6 @@ def cmd_whatsapp(args):
         print("⚠ Pairing may not have completed. Run 'hermes whatsapp' to try again.")
 
 
-def cmd_whatsapp_cloud(args):
-    """Set up WhatsApp Business Cloud API (official Meta integration).
-
-    Walks the user through the Meta-side credentials (Phone Number ID,
-    Access Token, App Secret, optional App/WABA IDs) plus webhook
-    configuration. Includes field-shape validators that catch the most
-    common setup mistakes (e.g. pasting a phone number into the Phone
-    Number ID field).
-
-    Distinct from ``hermes whatsapp`` (the Baileys bridge wizard) — the
-    two adapters are complementary, not alternatives. See
-    ``hermes_cli/setup_whatsapp_cloud.py``.
-    """
-    _require_tty("whatsapp-cloud")
-    from hermes_cli.setup_whatsapp_cloud import run_whatsapp_cloud_setup
-
-    return run_whatsapp_cloud_setup()
-
-
 def cmd_setup(args):
     """Interactive setup wizard."""
     from hermes_cli.setup import run_setup_wizard
@@ -4117,37 +4098,6 @@ def cmd_webhook(args):
     from hermes_cli.webhook import webhook_command
 
     webhook_command(args)
-
-
-def cmd_slack(args):
-    """Slack integration helpers.
-
-    Dispatches ``hermes slack <subcommand>``. Currently supports:
-      manifest — print or write a Slack app manifest with every gateway
-                 command registered as a first-class slash.
-    """
-    sub = getattr(args, "slack_command", None)
-    if sub in {None, ""}:
-        # No subcommand — print usage hint.
-        print(
-            "usage: hermes slack <subcommand>\n"
-            "\n"
-            "subcommands:\n"
-            "  manifest   Generate a Slack app manifest with every gateway\n"
-            "             command registered as a native slash\n"
-            "\n"
-            "Run `hermes slack manifest -h` for details.",
-            file=sys.stderr,
-        )
-        return 1
-
-    if sub == "manifest":
-        from hermes_cli.slack_cli import slack_manifest_command
-
-        return slack_manifest_command(args)
-
-    print(f"Unknown slack subcommand: {sub}", file=sys.stderr)
-    return 1
 
 
 def cmd_kanban(args):
@@ -9910,7 +9860,6 @@ def _coalesce_session_name_args(argv: list) -> list:
         "gateway",
         "setup",
         "whatsapp",
-        "whatsapp-cloud",
         "login",
         "logout",
         "auth",
@@ -10931,8 +10880,8 @@ _BUILTIN_SUBCOMMANDS = frozenset(
         "model", "pairing", "plugins", "portal", "postinstall", "profile", "proxy",
         "prompt-size",
         "send", "sessions", "setup",
-        "skills", "slack", "status", "tools", "uninstall", "update",
-        "version", "webhook", "whatsapp", "whatsapp-cloud", "chat", "secrets", "security",
+        "skills", "status", "tools", "uninstall", "update",
+        "version", "webhook", "whatsapp", "chat", "secrets", "security",
         # Help-ish invocations — plugin commands not being listed in
         # top-level --help is an acceptable trade-off for skipping an
         # expensive eager import of every bundled plugin module.

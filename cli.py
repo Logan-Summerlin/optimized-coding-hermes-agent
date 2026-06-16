@@ -4137,7 +4137,7 @@ class HermesCLI(CLIAgentSetupMixin, CLICommandsMixin):
         registered so the cached label always matches the live binding.
         """
         try:
-            from hermes_cli.voice import format_voice_record_key_for_status
+            from hermes_cli.voice_keys import format_voice_record_key_for_status
             self._voice_record_key_display_cache = format_voice_record_key_for_status(raw_key)
         except Exception:
             self._voice_record_key_display_cache = "Ctrl+B"
@@ -11821,7 +11821,7 @@ class HermesCLI(CLIAgentSetupMixin, CLICommandsMixin):
         _raw_key: object = "ctrl+b"
         try:
             from hermes_cli.config import load_config
-            from hermes_cli.voice import (
+            from hermes_cli.voice_keys import (
                 normalize_voice_record_key_for_prompt_toolkit,
                 voice_record_key_from_config,
             )

@@ -102,20 +102,9 @@ LAZY_DEPS: dict[str, tuple[str, ...]] = {
     # 2.4.6 was removed and clean releases resumed (2.4.7, 2.4.8). Voxtral
     # STT + TTS share the same SDK.
     "tts.mistral": ("mistralai==2.4.8",),
-    "tts.edge": ("edge-tts==7.2.7",),
-    "tts.elevenlabs": ("elevenlabs==1.59.0",),
 
     # ─── Speech-to-text providers ──────────────────────────────────────────
     "stt.mistral": ("mistralai==2.4.8",),
-    "stt.faster_whisper": (
-        "faster-whisper==1.2.1",
-        "sounddevice==0.5.5",
-        "numpy==2.4.3",
-    ),
-
-    # ─── Image generation backends ─────────────────────────────────────────
-    "image.fal": ("fal-client==0.13.1",),
-
     # ─── Memory providers ──────────────────────────────────────────────────
     "memory.honcho": ("honcho-ai==2.0.1",),
     "memory.hindsight": ("hindsight-client==0.6.1",),
@@ -170,12 +159,6 @@ LAZY_DEPS: dict[str, tuple[str, ...]] = {
         "uvicorn[standard]==0.41.0",
         "starlette==1.0.1",  # CVE-2026-48710 (BadHost) — keep lazy-install in sync with pyproject [web]
     ),
-    # Vision image-resize recovery (Pillow). Pillow is now a CORE dependency
-    # (pyproject `dependencies`), so this entry is a belt-and-suspenders fallback
-    # for stripped/source-build installs that somehow dropped it. The vision
-    # call site uses prompt=False so it can never raise a blocking input()
-    # prompt mid-session (#40490).
-    "tool.vision": ("Pillow==12.2.0",),
 }
 
 

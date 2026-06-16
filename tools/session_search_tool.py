@@ -628,48 +628,43 @@ def check_session_search_requirements() -> bool:
 SESSION_SEARCH_SCHEMA = {
     "name": "session_search",
     "description": (
-        "Search past sessions in the local session DB, or scroll inside one "
-        "(FTS5 over the SQLite message store — no LLM calls). Four shapes: "
-        "DISCOVERY (pass `query`) returns top matching sessions with a snippet and "
-        "context window; SCROLL (`session_id` + `around_message_id`) returns ±`window` "
-        "messages, paging by passing the last/first returned id back; READ "
-        "(`session_id` only) dumps the session; BROWSE (no args) lists recent "
-        "sessions. FTS5 syntax: AND implicit; use OR, \"quoted phrases\", NOT, prefix*. "
-        "Reach for this on 'what did we do about X' / 'where did we leave Y' questions."
+        "Search/recall past local sessions (SQLite FTS5; no LLM calls). "
+        "Use query for discovery, session_id to read, session_id+around_message_id "
+        "to scroll, or no args for recent sessions. FTS5 supports OR, NOT, phrases, prefix*."
     ),
     "parameters": {
         "type": "object",
         "properties": {
             "query": {
                 "type": "string",
-                "description": "Discovery shape: keywords, phrases, or boolean FTS5 expression to find. Omit to browse recent sessions.",
+                "description": "Keywords/FTS5 query. Omit to browse recent.",
             },
             "limit": {
                 "type": "integer",
-                "description": "Discovery shape: max sessions to return (default 3, max 10).",
+                "description": "Max sessions (default 3, max 10).",
                 "default": 3,
             },
             "sort": {
                 "type": "string",
                 "enum": ["newest", "oldest"],
-                "description": "Discovery shape: temporal bias on top of relevance. Omit for relevance-only; 'newest' for recency, 'oldest' for origin.",
+                "description": "Optional recency sort.",
             },
             "session_id": {
                 "type": "string",
-                "description": "Scroll/read shape: the session to read inside (from a prior discovery result).",
+                "description": "Session to read/scroll.",
             },
             "around_message_id": {
                 "type": "integer",
-                "description": "Scroll shape: message id to center the window on. Pass the last returned id to page forward, the first to page backward.",
+                "description": "Message id to center scroll window.",
             },
             "window": {
                 "type": "integer",
-                "description": "Scroll shape: messages on each side of the anchor. Clamped to [1, 20].",
+                "description": "Messages each side; clamped 1-20.",
                 "default": 5,
             },
             "role_filter": {
                 "type": "string",
-                "description": "Comma-separated roles to include. Defaults to 'user,assistant'; add 'tool' to include tool output.",
+                "description": "Comma-separated roles; default user,assistant.",
             },
         },
         "required": [],
