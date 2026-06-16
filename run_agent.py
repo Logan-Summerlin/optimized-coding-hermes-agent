@@ -3338,11 +3338,6 @@ class AIAgent:
         )
 
     @staticmethod
-    def _cap_delegate_task_calls(tool_calls: list) -> list:
-        """No-op: subagent delegation was removed from the lean agent."""
-        return tool_calls
-
-    @staticmethod
     def _deduplicate_tool_calls(tool_calls: list) -> list:
         """Remove duplicate (tool_name, arguments) pairs within a single turn.
 
@@ -5045,10 +5040,6 @@ class AIAgent:
             )
         finally:
             self._executing_tools = False
-
-    def _dispatch_delegate_task(self, function_args: dict) -> str:
-        """Subagent delegation was removed from the lean agent."""
-        raise RuntimeError("delegate_task is not available in this build")
 
     def _invoke_tool(self, function_name: str, function_args: dict, effective_task_id: str,
                      tool_call_id: Optional[str] = None, messages: list = None,
